@@ -1,0 +1,25 @@
+# Entorno virtual
+venv/
+env/
+
+# Base de datos
+data/*.db
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Variables de entorno
+.env
+
+# Respaldos
+backups/
+*.backup
