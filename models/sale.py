@@ -18,6 +18,7 @@ class SaleStatus(enum.Enum):
     PENDING = "Pendiente"
     COMPLETED = "Completada"
     CANCELLED = "Cancelada"
+    EDITED = "Editada"
 
 class Sale(BaseModel):
     """

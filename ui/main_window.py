@@ -10,9 +10,11 @@ from PyQt6.QtGui import QFont
 from ui.styles import MAIN_STYLESHEET
 from ui.views.dashboard_view import DashboardView
 from ui.views.products_view import ProductsView
+from ui.views.raw_materials_view import RawMaterialsView
 from ui.views.inventory_view import InventoryView
 from ui.views.sales_view import SalesView
 from ui.views.customers_view import CustomersView
+from ui.views.expenses_view import ExpensesView
 from ui.views.reports_view import ReportsView
 
 class MainWindow(QMainWindow):
@@ -81,24 +83,30 @@ class MainWindow(QMainWindow):
         # Botones de navegación
         self.btn_dashboard = self.create_nav_button("🏠  Dashboard")
         self.btn_products = self.create_nav_button("📦  Productos")
+        self.btn_raw_materials = self.create_nav_button("🧪  Materias Primas")
         self.btn_inventory = self.create_nav_button("📊  Inventario")
         self.btn_sales = self.create_nav_button("💰  Ventas")
+        self.btn_expenses = self.create_nav_button("📤  Egresos")
         self.btn_customers = self.create_nav_button("👥  Clientes")
         self.btn_reports = self.create_nav_button("📈  Reportes")
         
         # Conectar señales
         self.btn_dashboard.clicked.connect(self.show_dashboard)
         self.btn_products.clicked.connect(self.show_products)
+        self.btn_raw_materials.clicked.connect(self.show_raw_materials)
         self.btn_inventory.clicked.connect(self.show_inventory)
         self.btn_sales.clicked.connect(self.show_sales)
+        self.btn_expenses.clicked.connect(self.show_expenses)
         self.btn_customers.clicked.connect(self.show_customers)
         self.btn_reports.clicked.connect(self.show_reports)
         
         # Agregar botones al layout
         layout.addWidget(self.btn_dashboard)
         layout.addWidget(self.btn_products)
+        layout.addWidget(self.btn_raw_materials)
         layout.addWidget(self.btn_inventory)
         layout.addWidget(self.btn_sales)
+        layout.addWidget(self.btn_expenses)
         layout.addWidget(self.btn_customers)
         layout.addWidget(self.btn_reports)
         
@@ -133,16 +141,20 @@ class MainWindow(QMainWindow):
         # Crear vistas
         self.dashboard_view = DashboardView()
         self.products_view = ProductsView()
+        self.raw_materials_view = RawMaterialsView()
         self.inventory_view = InventoryView()
         self.sales_view = SalesView()
+        self.expenses_view = ExpensesView()
         self.customers_view = CustomersView()
         self.reports_view = ReportsView()
         
         # Agregar vistas al stack
         self.stacked_widget.addWidget(self.dashboard_view)
         self.stacked_widget.addWidget(self.products_view)
+        self.stacked_widget.addWidget(self.raw_materials_view)
         self.stacked_widget.addWidget(self.inventory_view)
         self.stacked_widget.addWidget(self.sales_view)
+        self.stacked_widget.addWidget(self.expenses_view)
         self.stacked_widget.addWidget(self.customers_view)
         self.stacked_widget.addWidget(self.reports_view)
         
@@ -152,8 +164,10 @@ class MainWindow(QMainWindow):
         """Desmarca todos los botones de navegación"""
         self.btn_dashboard.setChecked(False)
         self.btn_products.setChecked(False)
+        self.btn_raw_materials.setChecked(False)
         self.btn_inventory.setChecked(False)
         self.btn_sales.setChecked(False)
+        self.btn_expenses.setChecked(False)
         self.btn_customers.setChecked(False)
         self.btn_reports.setChecked(False)
     
@@ -169,6 +183,12 @@ class MainWindow(QMainWindow):
         self.btn_products.setChecked(True)
         self.stacked_widget.setCurrentWidget(self.products_view)
     
+    def show_raw_materials(self):
+        """Muestra la vista de materias primas"""
+        self.uncheck_all_buttons()
+        self.btn_raw_materials.setChecked(True)
+        self.stacked_widget.setCurrentWidget(self.raw_materials_view)
+    
     def show_inventory(self):
         """Muestra la vista de inventario"""
         self.uncheck_all_buttons()
@@ -180,6 +200,12 @@ class MainWindow(QMainWindow):
         self.uncheck_all_buttons()
         self.btn_sales.setChecked(True)
         self.stacked_widget.setCurrentWidget(self.sales_view)
+    
+    def show_expenses(self):
+        """Muestra la vista de egresos"""
+        self.uncheck_all_buttons()
+        self.btn_expenses.setChecked(True)
+        self.stacked_widget.setCurrentWidget(self.expenses_view)
     
     def show_customers(self):
         """Muestra la vista de clientes"""

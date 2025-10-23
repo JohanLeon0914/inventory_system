@@ -10,8 +10,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDate
 from datetime import datetime, timedelta
 from config.database import get_session, close_session
-from models import Sale, Product, Customer, SaleItem
+from models import Sale, Product, Customer, SaleItem, RawMaterial, RawMaterialMovement, RawMaterialMovementType, ProductMaterial
 from sqlalchemy import func, desc
+from sqlalchemy.orm import joinedload
 
 class ReportsView(QWidget):
     """Vista para reportes y estadísticas"""
@@ -300,6 +301,125 @@ class ReportsView(QWidget):
         low_stock_group.setLayout(low_stock_layout)
         content_layout.addWidget(low_stock_group)
         
+        # Consumo de materias primas
+        materials_consumption_group = QGroupBox("Consumo de Materias Primas (Período Seleccionado)")
+        materials_consumption_group.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+                font-weight: bold;
+                color: #0f172a;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #0f172a;
+            }
+        """)
+        materials_consumption_layout = QVBoxLayout()
+        
+        self.materials_consumption_table = QTableWidget()
+        self.materials_consumption_table.setColumnCount(5)
+        self.materials_consumption_table.setHorizontalHeaderLabels([
+            "Materia Prima", "Unidad", "Cantidad Consumida", "Costo Total", "Stock Actual"
+        ])
+        header = self.materials_consumption_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.materials_consumption_table.setColumnWidth(1, 80)
+        self.materials_consumption_table.setColumnWidth(2, 150)
+        self.materials_consumption_table.setColumnWidth(3, 130)
+        self.materials_consumption_table.setColumnWidth(4, 120)
+        self.materials_consumption_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.materials_consumption_table.verticalHeader().setVisible(False)
+        self.materials_consumption_table.setMinimumHeight(250)
+        
+        materials_consumption_layout.addWidget(self.materials_consumption_table)
+        materials_consumption_group.setLayout(materials_consumption_layout)
+        content_layout.addWidget(materials_consumption_group)
+        
+        # Proyección de producción
+        production_projection_group = QGroupBox("Proyección de Producción (Basada en Stock de Materias Primas)")
+        production_projection_group.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+                font-weight: bold;
+                color: #0f172a;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #0f172a;
+            }
+        """)
+        production_projection_layout = QVBoxLayout()
+        
+        self.production_projection_table = QTableWidget()
+        self.production_projection_table.setColumnCount(4)
+        self.production_projection_table.setHorizontalHeaderLabels([
+            "Producto", "Unidades Producibles", "Costo Real (Materias Primas)", "Precio Venta"
+        ])
+        header = self.production_projection_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.production_projection_table.setColumnWidth(1, 150)
+        self.production_projection_table.setColumnWidth(2, 200)
+        self.production_projection_table.setColumnWidth(3, 120)
+        self.production_projection_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.production_projection_table.verticalHeader().setVisible(False)
+        self.production_projection_table.setMinimumHeight(250)
+        
+        production_projection_layout.addWidget(self.production_projection_table)
+        production_projection_group.setLayout(production_projection_layout)
+        content_layout.addWidget(production_projection_group)
+        
+        # Materias primas con bajo stock
+        low_materials_stock_group = QGroupBox("Materias Primas con Bajo Stock")
+        low_materials_stock_group.setStyleSheet("""
+            QGroupBox {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+                font-weight: bold;
+                color: #0f172a;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #0f172a;
+            }
+        """)
+        low_materials_stock_layout = QVBoxLayout()
+        
+        self.low_materials_stock_table = QTableWidget()
+        self.low_materials_stock_table.setColumnCount(5)
+        self.low_materials_stock_table.setHorizontalHeaderLabels([
+            "Materia Prima", "Unidad", "Stock Actual", "Stock Mínimo", "Estado"
+        ])
+        header = self.low_materials_stock_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.low_materials_stock_table.setColumnWidth(1, 80)
+        self.low_materials_stock_table.setColumnWidth(2, 120)
+        self.low_materials_stock_table.setColumnWidth(3, 120)
+        self.low_materials_stock_table.setColumnWidth(4, 120)
+        self.low_materials_stock_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.low_materials_stock_table.verticalHeader().setVisible(False)
+        self.low_materials_stock_table.setMinimumHeight(250)
+        
+        low_materials_stock_layout.addWidget(self.low_materials_stock_table)
+        low_materials_stock_group.setLayout(low_materials_stock_layout)
+        content_layout.addWidget(low_materials_stock_group)
+        
         content_layout.addStretch()
         
         scroll.setWidget(content_widget)
@@ -310,6 +430,9 @@ class ReportsView(QWidget):
         self.load_top_products()
         self.load_top_customers()
         self.load_low_stock_products()
+        self.load_materials_consumption()
+        self.load_production_projection()
+        self.load_low_materials_stock()
     
     def load_top_products(self):
         """Carga los productos más vendidos"""
@@ -443,6 +566,175 @@ class ReportsView(QWidget):
             
         except Exception as e:
             print(f"Error al cargar productos con stock bajo: {e}")
+        finally:
+            close_session()
+    
+    def load_materials_consumption(self):
+        """Carga el consumo de materias primas en el período seleccionado"""
+        session = get_session()
+        try:
+            date_from = self.date_from.date().toPyDate()
+            date_to = self.date_to.date().toPyDate()
+            
+            from datetime import datetime
+            datetime_from = datetime.combine(date_from, datetime.min.time())
+            datetime_to = datetime.combine(date_to, datetime.max.time())
+            
+            # Obtener movimientos de tipo PRODUCTION (ventas)
+            movements = session.query(
+                RawMaterialMovement.raw_material_id,
+                func.sum(RawMaterialMovement.quantity).label('total_quantity')
+            ).filter(
+                RawMaterialMovement.movement_type == RawMaterialMovementType.PRODUCTION,
+                RawMaterialMovement.created_at.between(datetime_from, datetime_to)
+            ).group_by(RawMaterialMovement.raw_material_id).all()
+            
+            self.materials_consumption_table.setRowCount(len(movements))
+            
+            for row, (material_id, total_qty) in enumerate(movements):
+                material = session.query(RawMaterial).filter_by(id=material_id).first()
+                if not material:
+                    continue
+                
+                # Nombre
+                self.materials_consumption_table.setItem(row, 0, QTableWidgetItem(material.name))
+                
+                # Unidad
+                unit_item = QTableWidgetItem(material.unit)
+                unit_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.materials_consumption_table.setItem(row, 1, unit_item)
+                
+                # Cantidad consumida (absoluto)
+                consumed = abs(total_qty)
+                qty_item = QTableWidgetItem(f"{consumed:.2f}")
+                qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.materials_consumption_table.setItem(row, 2, qty_item)
+                
+                # Costo total
+                cost = consumed * material.cost_per_unit
+                cost_item = QTableWidgetItem(f"${cost:,.2f}")
+                cost_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
+                self.materials_consumption_table.setItem(row, 3, cost_item)
+                
+                # Stock actual
+                stock_item = QTableWidgetItem(f"{material.stock:.2f}")
+                stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if material.is_low_stock:
+                    stock_item.setForeground(Qt.GlobalColor.red)
+                self.materials_consumption_table.setItem(row, 4, stock_item)
+            
+            if len(movements) == 0:
+                self.materials_consumption_table.setRowCount(1)
+                self.materials_consumption_table.setItem(0, 0, QTableWidgetItem("No hay consumo de materias primas en este período"))
+                self.materials_consumption_table.setSpan(0, 0, 1, 5)
+        
+        except Exception as e:
+            print(f"Error al cargar consumo de materias primas: {e}")
+        finally:
+            close_session()
+    
+    def load_production_projection(self):
+        """Carga la proyección de producción basada en stock de materias primas"""
+        session = get_session()
+        try:
+            # Obtener todos los productos con materias primas asociadas
+            products = session.query(Product).options(joinedload(Product.product_materials)).all()
+            
+            # Filtrar productos que tienen materias primas
+            products_with_materials = [p for p in products if p.product_materials]
+            
+            self.production_projection_table.setRowCount(len(products_with_materials))
+            
+            for row, product in enumerate(products_with_materials):
+                # Nombre del producto
+                self.production_projection_table.setItem(row, 0, QTableWidgetItem(product.name))
+                
+                # Unidades producibles
+                max_units = product.max_producible_units
+                units_item = QTableWidgetItem(str(max_units) if max_units != float('inf') else "∞")
+                units_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if max_units == 0:
+                    units_item.setForeground(Qt.GlobalColor.red)
+                elif max_units < 10:
+                    units_item.setForeground(Qt.GlobalColor.darkYellow)
+                self.production_projection_table.setItem(row, 1, units_item)
+                
+                # Costo real de materias primas
+                real_cost = product.real_cost_from_materials
+                cost_item = QTableWidgetItem(f"${real_cost:.2f}")
+                cost_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
+                self.production_projection_table.setItem(row, 2, cost_item)
+                
+                # Precio de venta
+                price_item = QTableWidgetItem(f"${product.sale_price:.2f}")
+                price_item.setTextAlignment(Qt.AlignmentFlag.AlignRight)
+                self.production_projection_table.setItem(row, 3, price_item)
+            
+            if len(products_with_materials) == 0:
+                self.production_projection_table.setRowCount(1)
+                self.production_projection_table.setItem(0, 0, QTableWidgetItem("No hay productos con materias primas asignadas"))
+                self.production_projection_table.setSpan(0, 0, 1, 4)
+        
+        except Exception as e:
+            print(f"Error al cargar proyección de producción: {e}")
+        finally:
+            close_session()
+    
+    def load_low_materials_stock(self):
+        """Carga las materias primas con stock bajo"""
+        session = get_session()
+        try:
+            # Obtener materias primas con stock bajo o en cero
+            materials = session.query(RawMaterial).filter(
+                RawMaterial.stock <= RawMaterial.min_stock
+            ).order_by(RawMaterial.stock.asc()).all()
+            
+            self.low_materials_stock_table.setRowCount(len(materials))
+            
+            for row, material in enumerate(materials):
+                # Nombre
+                name_item = QTableWidgetItem(material.name)
+                if material.stock == 0:
+                    name_item.setForeground(Qt.GlobalColor.red)
+                self.low_materials_stock_table.setItem(row, 0, name_item)
+                
+                # Unidad
+                unit_item = QTableWidgetItem(material.unit)
+                unit_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.low_materials_stock_table.setItem(row, 1, unit_item)
+                
+                # Stock actual
+                stock_item = QTableWidgetItem(f"{material.stock:.2f}")
+                stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if material.stock == 0:
+                    stock_item.setForeground(Qt.GlobalColor.red)
+                self.low_materials_stock_table.setItem(row, 2, stock_item)
+                
+                # Stock mínimo
+                min_stock_item = QTableWidgetItem(f"{material.min_stock:.2f}")
+                min_stock_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.low_materials_stock_table.setItem(row, 3, min_stock_item)
+                
+                # Estado
+                if material.stock == 0:
+                    status = "SIN STOCK"
+                    color = Qt.GlobalColor.red
+                else:
+                    status = "BAJO"
+                    color = Qt.GlobalColor.darkYellow
+                
+                status_item = QTableWidgetItem(status)
+                status_item.setForeground(color)
+                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.low_materials_stock_table.setItem(row, 4, status_item)
+            
+            if len(materials) == 0:
+                self.low_materials_stock_table.setRowCount(1)
+                self.low_materials_stock_table.setItem(0, 0, QTableWidgetItem("No hay materias primas con stock bajo"))
+                self.low_materials_stock_table.setSpan(0, 0, 1, 5)
+        
+        except Exception as e:
+            print(f"Error al cargar materias primas con stock bajo: {e}")
         finally:
             close_session()
     
