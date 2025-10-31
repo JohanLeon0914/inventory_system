@@ -36,6 +36,15 @@ class InventoryMovement(BaseModel):
     # Razón del movimiento
     reason = Column(String(200), nullable=True)  # "Venta", "Compra a proveedor X", etc.
     
+    # Razón de edición (si el movimiento fue editado)
+    edit_reason = Column(String(500), nullable=True)  # Razón de por qué se editó
+    
+    # Nota adicional (anotación personalizada)
+    note = Column(String(500), nullable=True)  # Nota adicional del usuario
+    
+    # Referencia (ID de venta, egreso, etc.)
+    reference = Column(String(100), nullable=True)  # Referencia a otra entidad (venta, etc.)
+    
     # Usuario que realizó el movimiento (opcional, para futuro)
     user = Column(String(100), nullable=True)
     

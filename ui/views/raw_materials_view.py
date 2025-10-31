@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QShowEvent
 from config.database import get_session, close_session
-from models import RawMaterial
+from models import RawMaterial, RawMaterialMovement, RawMaterialMovementType
+from ui.views.increase_stock_raw_materials_dialog import IncreaseStockAllRawMaterialsDialog
 
 class RawMaterialsView(QWidget):
     """Vista para gestionar materias primas"""
@@ -39,6 +40,24 @@ class RawMaterialsView(QWidget):
         header_layout.addWidget(title)
         
         header_layout.addStretch()
+        
+        btn_add_stock_all = QPushButton("📈 Aumentar Stock a Todas")
+        btn_add_stock_all.setFixedHeight(40)
+        btn_add_stock_all.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        btn_add_stock_all.clicked.connect(self.increase_stock_all_materials)
+        header_layout.addWidget(btn_add_stock_all)
         
         btn_new = QPushButton("+ Nueva Materia Prima")
         btn_new.setFixedHeight(40)
@@ -197,6 +216,12 @@ class RawMaterialsView(QWidget):
     def edit_material(self, material):
         """Edita una materia prima existente"""
         dialog = MaterialDialog(self, material)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_raw_materials()
+    
+    def increase_stock_all_materials(self):
+        """Abre diálogo para aumentar stock a todas las materias primas"""
+        dialog = IncreaseStockAllRawMaterialsDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_raw_materials()
     
@@ -376,6 +401,22 @@ class MaterialDialog(QDialog):
                 if existing:
                     QMessageBox.warning(self, "Error", f"El SKU '{sku}' ya está en uso.")
                     return
+                
+                # Registrar cambio de stock si fue modificado
+                previous_stock = material.stock
+                new_stock = self.stock_input.value()
+                
+                if previous_stock != new_stock:
+                    stock_diff = new_stock - previous_stock
+                    
+                    # Registrar movimiento
+                    movement = RawMaterialMovement(
+                        raw_material_id=material.id,
+                        movement_type=RawMaterialMovementType.ADJUSTMENT,
+                        quantity=stock_diff,
+                        reason=f"Ajuste manual de stock: {previous_stock:.2f} → {new_stock:.2f} {material.unit}"
+                    )
+                    session.add(movement)
             else:
                 # Crear nuevo
                 existing = session.query(RawMaterial).filter_by(sku=sku).first()

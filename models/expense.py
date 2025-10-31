@@ -6,10 +6,23 @@ from sqlalchemy.orm import relationship
 from models.base import BaseModel
 import enum
 
+# Importar PaymentMethod desde sale (o definir aquí si es necesario)
+try:
+    from models.sale import PaymentMethod
+except ImportError:
+    # Si no se puede importar, definir aquí
+    class PaymentMethod(enum.Enum):
+        """Métodos de pago disponibles"""
+        CASH = "Efectivo"
+        CARD = "Tarjeta"
+        TRANSFER = "Transferencia"
+        OTHER = "Otro"
+
 class ExpenseType(enum.Enum):
     """Tipos de egreso"""
     PRODUCT = "Producto"
     RAW_MATERIAL = "Materia Prima"
+    CASH = "Efectivo"
 
 class ExpenseReason(enum.Enum):
     """Razones de egreso"""
@@ -43,6 +56,21 @@ class Expense(BaseModel):
     
     # Cantidad que salió
     quantity = Column(Float, nullable=False)
+    
+    # Monto/Valor del egreso (para todos los tipos)
+    amount = Column(Float, nullable=True)  # Monto en dinero del egreso
+    
+    # Método de pago (cuando el egreso es salida de efectivo)
+    payment_method = Column(SQLEnum(PaymentMethod), nullable=True)
+    
+    # Tipo de transferencia (cuando payment_method es TRANSFER)
+    transfer_type = Column(String(100), nullable=True)  # Nequi, Daviplata, Bancolombia, Otro, etc.
+    
+    # Destinatario del egreso
+    recipient = Column(String(200), nullable=True)
+    
+    # Si el egreso está autorizado
+    is_authorized = Column(Integer, default=0, nullable=False)  # 0 = No autorizado, 1 = Autorizado
     
     # Descripción adicional
     notes = Column(String(500), nullable=True)

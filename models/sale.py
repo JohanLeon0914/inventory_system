@@ -1,10 +1,11 @@
 """
 Modelo de Venta - Registro de ventas realizadas
 """
-from sqlalchemy import Column, String, Float, Integer, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, String, Float, Integer, ForeignKey, Enum as SQLEnum, DateTime
 from sqlalchemy.orm import relationship
 from models.base import BaseModel
 import enum
+from datetime import datetime
 
 class PaymentMethod(enum.Enum):
     """Métodos de pago disponibles"""
@@ -43,8 +44,15 @@ class Sale(BaseModel):
     payment_method = Column(SQLEnum(PaymentMethod), default=PaymentMethod.CASH, nullable=False)
     status = Column(SQLEnum(SaleStatus), default=SaleStatus.COMPLETED, nullable=False)
     
+    # Tipo de transferencia (cuando payment_method es TRANSFER)
+    transfer_type = Column(String(100), nullable=True)  # Nequi, Daviplata, Bancolombia, Otro, etc.
+    
     # Notas adicionales
     notes = Column(String(500), nullable=True)
+    
+    # Facturación
+    has_invoice = Column(Integer, default=0, nullable=False)  # 0 = No, 1 = Sí
+    invoice_generated_at = Column(DateTime, nullable=True)  # Fecha de generación de factura
     
     # Relación con los items de la venta
     items = relationship('SaleItem', back_populates='sale', cascade='all, delete-orphan')

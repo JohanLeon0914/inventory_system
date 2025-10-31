@@ -3,7 +3,7 @@ Ventana principal de la aplicación
 """
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
-    QPushButton, QLabel, QStackedWidget, QFrame
+    QPushButton, QLabel, QStackedWidget, QFrame, QDialog
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -142,17 +142,18 @@ class MainWindow(QMainWindow):
         self.dashboard_view = DashboardView()
         self.products_view = ProductsView()
         self.raw_materials_view = RawMaterialsView()
-        self.inventory_view = InventoryView()
+        # InventoryView se crea lazy para permitir autenticación
+        self.inventory_view = None
         self.sales_view = SalesView()
         self.expenses_view = ExpensesView()
         self.customers_view = CustomersView()
         self.reports_view = ReportsView()
         
-        # Agregar vistas al stack
+        # Agregar vistas al stack (inventario se agrega dinámicamente)
         self.stacked_widget.addWidget(self.dashboard_view)
         self.stacked_widget.addWidget(self.products_view)
         self.stacked_widget.addWidget(self.raw_materials_view)
-        self.stacked_widget.addWidget(self.inventory_view)
+        # self.inventory_view se agregará después de la autenticación
         self.stacked_widget.addWidget(self.sales_view)
         self.stacked_widget.addWidget(self.expenses_view)
         self.stacked_widget.addWidget(self.customers_view)
@@ -191,6 +192,38 @@ class MainWindow(QMainWindow):
     
     def show_inventory(self):
         """Muestra la vista de inventario"""
+        # Crear vista de inventario si no existe
+        if self.inventory_view is None:
+            from ui.views.inventory_view import InventoryView
+            self.inventory_view = InventoryView(self)
+            # Insertar en la posición correcta (después de raw_materials, index 2)
+            self.stacked_widget.insertWidget(3, self.inventory_view)
+        
+        # Verificar si hay contraseña configurada
+        from config.database import get_session, close_session
+        from models.inventory_password import InventoryPassword
+        
+        session = get_session()
+        try:
+            password_record = session.query(InventoryPassword).first()
+            has_password = password_record and password_record.password_hash
+        finally:
+            close_session()
+        
+        # Solicitar autenticación dependiendo si hay contraseña
+        if has_password:
+            # Hay contraseña: solicitar autenticación
+            from ui.dialogs.inventory_auth_dialog import InventoryAuthDialog
+            auth_dialog = InventoryAuthDialog(self, is_password_set=True)
+            if auth_dialog.exec() == QDialog.DialogCode.Rejected:
+                # Usuario canceló, no cambiar de vista
+                return
+        else:
+            # No hay contraseña: mostrar opción opcional para establecer una
+            from ui.dialogs.inventory_auth_dialog import InventoryAuthDialog
+            auth_dialog = InventoryAuthDialog(self, is_password_set=False)
+            auth_dialog.exec()  # Ignorar resultado, siempre permitir acceso
+        
         self.uncheck_all_buttons()
         self.btn_inventory.setChecked(True)
         self.stacked_widget.setCurrentWidget(self.inventory_view)

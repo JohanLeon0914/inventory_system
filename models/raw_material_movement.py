@@ -39,6 +39,9 @@ class RawMaterialMovement(BaseModel):
     # Razón del movimiento
     reason = Column(String(500), nullable=True)
     
+    # Nota adicional (anotación personalizada)
+    note = Column(String(500), nullable=True)  # Nota adicional del usuario
+    
     # Usuario que realizó el movimiento (opcional)
     user = Column(String(100), nullable=True)
     

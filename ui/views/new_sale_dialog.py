@@ -75,7 +75,7 @@ class NewSaleDialog(QDialog):
         self.stacked_widget.setCurrentWidget(self.complete_sale_view)
         self.setWindowTitle("Nueva Venta - Completar Venta")
     
-    def complete_sale(self, sale_items, customer_id, payment_method):
+    def complete_sale(self, sale_items, customer_id, payment_method, tax_amount=0.0, transfer_type=None):
         """Completa la venta guardándola en la base de datos"""
         if not sale_items:
             return
@@ -113,7 +113,8 @@ class NewSaleDialog(QDialog):
             
             sale.customer_id = customer_id
             sale.payment_method = payment_method
-            sale.tax = 0
+            sale.tax = tax_amount  # Usar el impuesto pasado como parámetro
+            sale.transfer_type = transfer_type  # Guardar tipo de transferencia si aplica
             sale.discount = 0
             sale.status = SaleStatus.COMPLETED
             
@@ -138,7 +139,8 @@ class NewSaleDialog(QDialog):
                     quantity=-item_data['quantity'],
                     previous_stock=previous_stock,
                     new_stock=product.stock,
-                    reason=f"Venta {sale.invoice_number}"
+                    reason=f"Venta {sale.invoice_number}",
+                    reference=f"SALE-{sale.id}"  # Referencia a la venta
                 )
                 session.add(movement)
                 

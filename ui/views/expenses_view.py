@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget,
     QTableWidgetItem, QLabel, QDialog, QFormLayout, QComboBox,
     QDoubleSpinBox, QTextEdit, QMessageBox, QHeaderView, QGroupBox,
-    QDateEdit
+    QDateEdit, QCheckBox, QTabWidget
 )
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont
@@ -13,8 +13,9 @@ from config.database import get_session, close_session
 from models import (
     Expense, ExpenseType, ExpenseReason, Product, RawMaterial,
     InventoryMovement, MovementType, RawMaterialMovement, RawMaterialMovementType,
-    ProductMaterial
+    ProductMaterial, PaymentMethod
 )
+from PyQt6.QtWidgets import QLineEdit
 from datetime import datetime
 
 class ExpensesView(QWidget):
@@ -61,29 +62,67 @@ class ExpensesView(QWidget):
         
         layout.addLayout(header_layout)
         
-        # Tabla de egresos
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "Fecha", "Tipo", "Producto/Materia Prima", "Cantidad", "Razón", "Notas", "Acciones"
-        ])
+        # Crear tabs para separar tipos de egresos
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                background-color: white;
+            }
+            QTabBar::tab {
+                background-color: #f1f5f9;
+                color: #0f172a;
+                padding: 10px 20px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                margin-right: 2px;
+                font-weight: bold;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                color: #3b82f6;
+                border-bottom: 2px solid #3b82f6;
+            }
+        """)
         
-        # Configurar tabla
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(6, 100)
+        # Tab 1: Efectivo/Transferencias (primero)
+        self.cash_tab = QWidget()
+        cash_layout = QVBoxLayout(self.cash_tab)
+        self.cash_table = self.create_table(["Fecha", "Monto", "Método Pago", "Razón", "Destinatario", "Autorizado", "Notas", "Acciones"])
+        cash_layout.addWidget(self.cash_table)
+        self.tabs.addTab(self.cash_tab, "💵 Efectivo/Transferencias")
         
-        self.table.setAlternatingRowColors(True)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        # Tab 2: Productos y Materias Primas
+        self.inventory_tab = QWidget()
+        inventory_layout = QVBoxLayout(self.inventory_tab)
+        self.inventory_table = self.create_table(["Fecha", "Tipo", "Producto/Materia Prima", "Cantidad", "Monto", "Razón", "Destinatario", "Autorizado", "Notas", "Acciones"])
+        inventory_layout.addWidget(self.inventory_table)
+        self.tabs.addTab(self.inventory_tab, "📦 Inventario")
         
-        self.table.setStyleSheet("""
+        layout.addWidget(self.tabs)
+    
+    def create_table(self, headers):
+        """Crea y configura una tabla con los headers especificados"""
+        table = QTableWidget()
+        table.setColumnCount(len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        
+        header = table.horizontalHeader()
+        for i in range(len(headers)):
+            if headers[i] == "Acciones":
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+                table.setColumnWidth(i, 100)
+            elif headers[i] in ["Fecha", "Cantidad", "Monto", "Tipo", "Autorizado"]:
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+            else:
+                header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+        
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        
+        table.setStyleSheet("""
             QTableWidget {
                 background-color: white;
                 border: 1px solid #e2e8f0;
@@ -92,6 +131,7 @@ class ExpensesView(QWidget):
             }
             QTableWidget::item {
                 padding: 8px;
+                color: #0f172a;
             }
             QHeaderView::section {
                 background-color: #f8fafc;
@@ -103,62 +143,175 @@ class ExpensesView(QWidget):
             }
         """)
         
-        layout.addWidget(self.table)
+        return table
     
     def load_expenses(self):
-        """Carga los egresos desde la base de datos"""
+        """Carga los egresos desde la base de datos y los separa por tipo"""
         session = get_session()
         try:
             expenses = session.query(Expense).order_by(Expense.created_at.desc()).all()
             
-            self.table.setRowCount(len(expenses))
+            # Separar egresos
+            inventory_expenses = [e for e in expenses if e.expense_type != ExpenseType.CASH]
+            cash_expenses = [e for e in expenses if e.expense_type == ExpenseType.CASH]
             
-            for row, expense in enumerate(expenses):
-                # Fecha
-                date_str = expense.created_at.strftime("%Y-%m-%d %H:%M")
-                self.table.setItem(row, 0, QTableWidgetItem(date_str))
-                
-                # Tipo
-                self.table.setItem(row, 1, QTableWidgetItem(expense.expense_type.value))
-                
-                # Producto/Materia Prima
-                item_name = expense.product.name if expense.product else expense.raw_material.name
-                self.table.setItem(row, 2, QTableWidgetItem(item_name))
-                
-                # Cantidad
-                qty_item = QTableWidgetItem(f"{expense.quantity}")
-                qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.table.setItem(row, 3, qty_item)
-                
-                # Razón
-                self.table.setItem(row, 4, QTableWidgetItem(expense.reason.value))
-                
-                # Notas
-                notes = expense.notes if expense.notes else "-"
-                self.table.setItem(row, 5, QTableWidgetItem(notes))
-                
-                # Botón eliminar
-                btn_delete = QPushButton("🗑️ Eliminar")
-                btn_delete.setStyleSheet("""
-                    QPushButton {
-                        background-color: #ef4444;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 6px 12px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: #dc2626;
-                    }
-                """)
-                btn_delete.clicked.connect(lambda checked, e=expense: self.delete_expense(e))
-                self.table.setCellWidget(row, 6, btn_delete)
-                
-                self.table.setRowHeight(row, 50)
+            # Cargar tabla de inventario
+            self.load_inventory_table(inventory_expenses)
+            
+            # Cargar tabla de efectivo
+            self.load_cash_table(cash_expenses)
         
         finally:
             close_session()
+    
+    def load_inventory_table(self, expenses):
+        """Carga egresos de inventario en la tabla correspondiente"""
+        self.inventory_table.setRowCount(len(expenses))
+        
+        for row, expense in enumerate(expenses):
+            col = 0
+            # Fecha
+            date_str = expense.created_at.strftime("%Y-%m-%d %H:%M")
+            self.inventory_table.setItem(row, col, QTableWidgetItem(date_str))
+            col += 1
+            
+            # Tipo
+            self.inventory_table.setItem(row, col, QTableWidgetItem(expense.expense_type.value))
+            col += 1
+            
+            # Producto/Materia Prima
+            item_name = expense.product.name if expense.product else expense.raw_material.name
+            self.inventory_table.setItem(row, col, QTableWidgetItem(item_name))
+            col += 1
+            
+            # Cantidad
+            qty_item = QTableWidgetItem(f"{expense.quantity}")
+            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.inventory_table.setItem(row, col, qty_item)
+            col += 1
+            
+            # Monto
+            amount_text = f"${expense.amount:,.2f}" if expense.amount else "-"
+            amount_item = QTableWidgetItem(amount_text)
+            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.inventory_table.setItem(row, col, amount_item)
+            col += 1
+            
+            # Razón
+            self.inventory_table.setItem(row, col, QTableWidgetItem(expense.reason.value))
+            col += 1
+            
+            # Destinatario
+            recipient = expense.recipient if expense.recipient else "-"
+            self.inventory_table.setItem(row, col, QTableWidgetItem(recipient))
+            col += 1
+            
+            # Autorizado
+            authorized_text = "✓ Sí" if expense.is_authorized else "✗ No"
+            authorized_item = QTableWidgetItem(authorized_text)
+            if expense.is_authorized:
+                authorized_item.setForeground(Qt.GlobalColor.darkGreen)
+            else:
+                authorized_item.setForeground(Qt.GlobalColor.red)
+            authorized_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.inventory_table.setItem(row, col, authorized_item)
+            col += 1
+            
+            # Notas
+            notes = expense.notes if expense.notes else "-"
+            self.inventory_table.setItem(row, col, QTableWidgetItem(notes))
+            col += 1
+            
+            # Botón eliminar
+            btn_delete = QPushButton("🗑️ Eliminar")
+            btn_delete.setStyleSheet("""
+                QPushButton {
+                    background-color: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #dc2626;
+                }
+            """)
+            btn_delete.clicked.connect(lambda checked, e=expense: self.delete_expense(e))
+            self.inventory_table.setCellWidget(row, col, btn_delete)
+            
+            self.inventory_table.setRowHeight(row, 50)
+    
+    def load_cash_table(self, expenses):
+        """Carga egresos de efectivo en la tabla correspondiente"""
+        self.cash_table.setRowCount(len(expenses))
+        
+        for row, expense in enumerate(expenses):
+            col = 0
+            # Fecha
+            date_str = expense.created_at.strftime("%Y-%m-%d %H:%M")
+            self.cash_table.setItem(row, col, QTableWidgetItem(date_str))
+            col += 1
+            
+            # Monto
+            amount_text = f"${expense.amount:,.2f}" if expense.amount else "-"
+            amount_item = QTableWidgetItem(amount_text)
+            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            amount_item.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+            self.cash_table.setItem(row, col, amount_item)
+            col += 1
+            
+            # Método de pago
+            payment_method = expense.payment_method.value if expense.payment_method else "-"
+            if expense.transfer_type:
+                payment_method += f" ({expense.transfer_type})"
+            self.cash_table.setItem(row, col, QTableWidgetItem(payment_method))
+            col += 1
+            
+            # Razón
+            self.cash_table.setItem(row, col, QTableWidgetItem(expense.reason.value))
+            col += 1
+            
+            # Destinatario
+            recipient = expense.recipient if expense.recipient else "-"
+            self.cash_table.setItem(row, col, QTableWidgetItem(recipient))
+            col += 1
+            
+            # Autorizado
+            authorized_text = "✓ Sí" if expense.is_authorized else "✗ No"
+            authorized_item = QTableWidgetItem(authorized_text)
+            if expense.is_authorized:
+                authorized_item.setForeground(Qt.GlobalColor.darkGreen)
+            else:
+                authorized_item.setForeground(Qt.GlobalColor.red)
+            authorized_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.cash_table.setItem(row, col, authorized_item)
+            col += 1
+            
+            # Notas
+            notes = expense.notes if expense.notes else "-"
+            self.cash_table.setItem(row, col, QTableWidgetItem(notes))
+            col += 1
+            
+            # Botón eliminar
+            btn_delete = QPushButton("🗑️ Eliminar")
+            btn_delete.setStyleSheet("""
+                QPushButton {
+                    background-color: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #dc2626;
+                }
+            """)
+            btn_delete.clicked.connect(lambda checked, e=expense: self.delete_expense(e))
+            self.cash_table.setCellWidget(row, col, btn_delete)
+            
+            self.cash_table.setRowHeight(row, 50)
     
     def new_expense(self):
         """Abre el diálogo para crear un nuevo egreso"""
@@ -233,6 +386,15 @@ class NewExpenseDialog(QDialog):
                 border-top: 5px solid #6b7280;
                 margin-right: 5px;
             }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                outline: none;
+            }
         """)
         
         layout = QVBoxLayout(self)
@@ -243,24 +405,29 @@ class NewExpenseDialog(QDialog):
         # Tipo de egreso
         self.type_combo = QComboBox()
         self.type_combo.setMinimumHeight(35)
+        self.type_combo.addItem("Efectivo", ExpenseType.CASH)
         self.type_combo.addItem("Producto", ExpenseType.PRODUCT)
         self.type_combo.addItem("Materia Prima", ExpenseType.RAW_MATERIAL)
         self.type_combo.currentIndexChanged.connect(self.on_type_changed)
         form.addRow("Tipo:", self.type_combo)
         
-        # Item (producto o materia prima)
+        # Item (producto o materia prima) - solo visible para Producto y Materia Prima
+        self.item_label = QLabel("Item:")
+        self.item_label.setStyleSheet("color: #0f172a; font-weight: bold;")
         self.item_combo = QComboBox()
         self.item_combo.setMinimumHeight(35)
-        form.addRow("Item:", self.item_combo)
+        form.addRow(self.item_label, self.item_combo)
         
         # Cantidad
+        self.quantity_label = QLabel("Cantidad:")
+        self.quantity_label.setStyleSheet("color: #0f172a; font-weight: bold;")
         self.quantity_spin = QDoubleSpinBox()
         self.quantity_spin.setMinimum(0.01)
         self.quantity_spin.setMaximum(999999)
         self.quantity_spin.setValue(1)
         self.quantity_spin.setDecimals(2)
         self.quantity_spin.setMinimumHeight(35)
-        form.addRow("Cantidad:", self.quantity_spin)
+        form.addRow(self.quantity_label, self.quantity_spin)
         
         # Razón
         self.reason_combo = QComboBox()
@@ -268,6 +435,186 @@ class NewExpenseDialog(QDialog):
         for reason in ExpenseReason:
             self.reason_combo.addItem(reason.value, reason)
         form.addRow("Razón:", self.reason_combo)
+        
+        # Método de pago
+        self.payment_method_combo = QComboBox()
+        self.payment_method_combo.setMinimumHeight(35)
+        self.payment_method_combo.addItem("No aplica", None)
+        for method in PaymentMethod:
+            self.payment_method_combo.addItem(method.value, method)
+        self.payment_method_combo.currentIndexChanged.connect(self.on_payment_method_changed)
+        self.payment_method_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                padding: 4px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: transparent;
+                width: 30px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 7px solid #64748b;
+                margin-right: 5px;
+            }
+        """)
+        form.addRow("Método de Pago:", self.payment_method_combo)
+        
+        # Tipo de transferencia (oculto inicialmente)
+        self.transfer_type_label = QLabel("Tipo de Transferencia:")
+        self.transfer_type_label.setStyleSheet("color: #0f172a; font-weight: bold;")
+        self.transfer_type_label.setVisible(False)
+        
+        self.transfer_type_combo = QComboBox()
+        self.transfer_type_combo.setMinimumHeight(35)
+        self.transfer_type_combo.addItems(["Nequi", "Daviplata", "Bancolombia", "Otro"])
+        self.transfer_type_combo.setVisible(False)
+        self.transfer_type_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                padding: 4px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: transparent;
+                width: 30px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 7px solid #64748b;
+                margin-right: 5px;
+            }
+        """)
+        self.transfer_type_combo.currentIndexChanged.connect(self.on_transfer_type_changed)
+        form.addRow(self.transfer_type_label, self.transfer_type_combo)
+        
+        # Campo para "Otro" tipo de transferencia
+        self.other_transfer_label = QLabel("Especifique:")
+        self.other_transfer_label.setStyleSheet("color: #0f172a; font-weight: bold;")
+        self.other_transfer_label.setVisible(False)
+        
+        self.other_transfer_input = QLineEdit()
+        self.other_transfer_input.setMinimumHeight(35)
+        self.other_transfer_input.setPlaceholderText("Ej: Paypal, Bitcoin, etc.")
+        self.other_transfer_input.setVisible(False)
+        self.other_transfer_input.setStyleSheet("""
+            QLineEdit {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+        """)
+        form.addRow(self.other_transfer_label, self.other_transfer_input)
+        
+        # Destinatario
+        self.recipient_input = QLineEdit()
+        self.recipient_input.setMinimumHeight(35)
+        self.recipient_input.setPlaceholderText("Nombre del destinatario o descripción")
+        self.recipient_input.setStyleSheet("""
+            QLineEdit {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+        """)
+        form.addRow("Destinatario:", self.recipient_input)
+        
+        # Autorizado
+        self.authorized_checkbox = QCheckBox("¿Está autorizado?")
+        self.authorized_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: #0f172a;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QCheckBox::indicator {
+                width: 20px;
+                height: 20px;
+                border: 2px solid #d1d5db;
+                border-radius: 4px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #10b981;
+                border-color: #10b981;
+            }
+        """)
+        form.addRow("", self.authorized_checkbox)
+        
+        # Monto/Valor del egreso (para todos los tipos)
+        self.amount_spin = QDoubleSpinBox()
+        self.amount_spin.setMinimum(0.00)
+        self.amount_spin.setMaximum(999999999.99)
+        self.amount_spin.setValue(0.00)
+        self.amount_spin.setDecimals(2)
+        self.amount_spin.setPrefix("$ ")
+        self.amount_spin.setMinimumHeight(35)
+        self.amount_spin.setStyleSheet("""
+            QDoubleSpinBox {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+        """)
+        form.addRow("Monto del Egreso:", self.amount_spin)
         
         # Notas
         self.notes_text = QTextEdit()
@@ -333,9 +680,27 @@ class NewExpenseDialog(QDialog):
     
     def on_type_changed(self):
         """Actualiza la lista de items según el tipo seleccionado"""
-        self.item_combo.clear()
         expense_type = self.type_combo.currentData()
         
+        # Si es efectivo, ocultar campos relacionados con inventario
+        is_cash = expense_type == ExpenseType.CASH
+        
+        self.item_label.setVisible(not is_cash)
+        self.item_combo.setVisible(not is_cash)
+        self.quantity_label.setVisible(not is_cash)
+        self.quantity_spin.setVisible(not is_cash)
+        self.stock_label.setVisible(not is_cash)
+        
+        # Si es efectivo, ocultar también las notas temporariamente
+        # (las notas estarán visibles pero no el stock)
+        
+        if is_cash:
+            # Limpiar el combo si es efectivo
+            self.item_combo.clear()
+            return
+        
+        # Si no es efectivo, cargar items normalmente
+        self.item_combo.clear()
         session = get_session()
         try:
             if expense_type == ExpenseType.PRODUCT:
@@ -350,6 +715,50 @@ class NewExpenseDialog(QDialog):
             close_session()
         
         self.update_stock_label()
+    
+    def on_payment_method_changed(self):
+        """Maneja el cambio en el método de pago"""
+        current_method = self.payment_method_combo.currentData()
+        
+        # Mostrar campos de transferencia solo si se selecciona Transferencia
+        is_transfer = current_method == PaymentMethod.TRANSFER
+        
+        self.transfer_type_label.setVisible(is_transfer)
+        self.transfer_type_combo.setVisible(is_transfer)
+        
+        # Si no es transferencia, ocultar también el campo "Otro"
+        if not is_transfer:
+            self.other_transfer_label.setVisible(False)
+            self.other_transfer_input.setVisible(False)
+        else:
+            # Si es transferencia, verificar si seleccionaron "Otro"
+            self.on_transfer_type_changed()
+    
+    def on_transfer_type_changed(self):
+        """Maneja el cambio en el tipo de transferencia"""
+        # Mostrar campo "Otro" solo si se selecciona "Otro"
+        show_other = self.transfer_type_combo.currentText() == "Otro"
+        self.other_transfer_label.setVisible(show_other)
+        self.other_transfer_input.setVisible(show_other)
+        
+        # Limpiar el campo si se cambia a otra opción
+        if not show_other:
+            self.other_transfer_input.clear()
+    
+    def get_transfer_type(self):
+        """Obtiene el tipo de transferencia según la selección"""
+        current_method = self.payment_method_combo.currentData()
+        
+        if current_method != PaymentMethod.TRANSFER:
+            return None
+        
+        transfer_type = self.transfer_type_combo.currentText()
+        if transfer_type == "Otro":
+            # Usar el valor del campo de texto si está especificado
+            other_text = self.other_transfer_input.text().strip()
+            return other_text if other_text else "Otro"
+        
+        return transfer_type
     
     def update_stock_label(self):
         """Actualiza la etiqueta de stock actual"""
@@ -374,15 +783,58 @@ class NewExpenseDialog(QDialog):
     
     def save_expense(self):
         """Guarda el egreso y actualiza el inventario"""
+        expense_type = self.type_combo.currentData()
+        reason = self.reason_combo.currentData()
+        notes = self.notes_text.toPlainText().strip()
+        
+        # Si es efectivo, no necesita item ni cantidad
+        if expense_type == ExpenseType.CASH:
+            # Validar que haya método de pago seleccionado
+            payment_method = self.payment_method_combo.currentData()
+            if not payment_method:
+                QMessageBox.warning(self, "Error", "Debe seleccionar un método de pago para egreso en efectivo")
+                return
+            
+            session = get_session()
+            try:
+                # Crear egreso de efectivo
+                expense = Expense()
+                expense.expense_type = expense_type
+                expense.reason = reason
+                expense.quantity = 0  # No aplica cantidad para efectivo
+                expense.notes = notes if notes else None
+                expense.payment_method = payment_method
+                expense.transfer_type = self.get_transfer_type()
+                expense.recipient = self.recipient_input.text().strip() if self.recipient_input.text().strip() else None
+                expense.is_authorized = 1 if self.authorized_checkbox.isChecked() else 0
+                expense.amount = self.amount_spin.value() if self.amount_spin.value() > 0 else None
+                
+                session.add(expense)
+                session.commit()
+                
+                QMessageBox.information(
+                    self,
+                    "Éxito",
+                    f"Egreso en efectivo registrado correctamente\n\n"
+                    f"Método de pago: {payment_method.value}"
+                )
+                self.accept()
+                return
+                
+            except Exception as e:
+                session.rollback()
+                QMessageBox.critical(self, "Error", f"Error al guardar egreso: {str(e)}")
+            finally:
+                close_session()
+            return
+        
+        # Para Producto y Materia Prima, validar items y stock
         if self.item_combo.count() == 0:
             QMessageBox.warning(self, "Error", "No hay items disponibles")
             return
         
         item_id = self.item_combo.currentData()
-        expense_type = self.type_combo.currentData()
         quantity = self.quantity_spin.value()
-        reason = self.reason_combo.currentData()
-        notes = self.notes_text.toPlainText().strip()
         
         session = get_session()
         try:
@@ -411,6 +863,11 @@ class NewExpenseDialog(QDialog):
             expense.reason = reason
             expense.quantity = quantity
             expense.notes = notes if notes else None
+            expense.payment_method = self.payment_method_combo.currentData()  # Guardar método de pago
+            expense.transfer_type = self.get_transfer_type()  # Guardar tipo de transferencia si aplica
+            expense.recipient = self.recipient_input.text().strip() if self.recipient_input.text().strip() else None
+            expense.is_authorized = 1 if self.authorized_checkbox.isChecked() else 0
+            expense.amount = self.amount_spin.value() if self.amount_spin.value() > 0 else None
             
             if expense_type == ExpenseType.PRODUCT:
                 expense.product_id = item_id

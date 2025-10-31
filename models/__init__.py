@@ -13,6 +13,8 @@ from models.sale import Sale, PaymentMethod, SaleStatus
 from models.sale_item import SaleItem
 from models.inventory_movement import InventoryMovement, MovementType
 from models.expense import Expense, ExpenseType, ExpenseReason
+from models.inventory_password import InventoryPassword
+from models.company_info import CompanyInfo
 
 __all__ = [
     'Base',
@@ -34,4 +36,6 @@ __all__ = [
     'Expense',
     'ExpenseType',
     'ExpenseReason',
+    'InventoryPassword',
+    'CompanyInfo',
 ]

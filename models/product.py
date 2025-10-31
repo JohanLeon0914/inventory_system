@@ -15,6 +15,7 @@ class Product(BaseModel):
     name = Column(String(200), nullable=False)
     sku = Column(String(50), unique=True, nullable=False)  # Código único del producto
     description = Column(Text, nullable=True)
+    image_path = Column(String(500), nullable=True)  # Ruta de la imagen del producto
     
     # Categoría
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=True)

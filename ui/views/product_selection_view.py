@@ -1,6 +1,7 @@
 """
 Vista de Selección de Productos - Para elegir productos antes de completar la venta
 """
+import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QGridLayout, QGroupBox, QLineEdit, QComboBox
@@ -8,7 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QIcon, QFont
 from config.database import get_session, close_session
-from models import Product, Customer
+from models import Product, Customer, Category
 
 class ProductSelectionView(QWidget):
     """Vista para seleccionar productos antes de completar la venta"""
@@ -22,6 +23,21 @@ class ProductSelectionView(QWidget):
         self.build_products_gallery()
     
     def init_ui(self):
+        # Establecer fondo blanco para el widget principal y estilos de tooltips
+        self.setStyleSheet("""
+            QWidget {
+                background-color: white;
+            }
+            QToolTip {
+                background-color: #ffffff;
+                color: #0f172a;
+                border: 2px solid #3b82f6;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: normal;
+            }
+        """)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
@@ -94,7 +110,7 @@ class ProductSelectionView(QWidget):
         
         # Búsqueda
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Buscar productos...")
+        self.search_input.setPlaceholderText("Buscar productos por nombre o SKU...")
         self.search_input.textChanged.connect(self.filter_products)
         self.search_input.setFixedHeight(40)
         self.search_input.setStyleSheet("""
@@ -131,6 +147,15 @@ class ProductSelectionView(QWidget):
             }
             QComboBox:focus {
                 border-color: #3b82f6;
+                outline: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                selection-background-color: #3b82f6;
+                selection-color: white;
                 outline: none;
             }
         """)
@@ -185,6 +210,7 @@ class ProductSelectionView(QWidget):
         
         # Container para la grilla de productos
         self.products_container = QWidget()
+        self.products_container.setStyleSheet("background-color: #f8fafc;")
         self.products_grid = QGridLayout(self.products_container)
         self.products_grid.setContentsMargins(15, 15, 15, 15)
         self.products_grid.setHorizontalSpacing(12)
@@ -212,9 +238,62 @@ class ProductSelectionView(QWidget):
         """Carga los productos disponibles"""
         session = get_session()
         try:
-            self.products_cache = session.query(Product).filter(Product.stock > 0).all()
+            from sqlalchemy.orm import joinedload
+            # Cargar productos con sus categorías usando joinedload
+            self.products_cache = session.query(Product).options(
+                joinedload(Product.category)
+            ).filter(Product.stock > 0).all()
+            # Acceder a las relaciones ahora para que se carguen antes de cerrar la sesión
+            for product in self.products_cache:
+                _ = product.category  # Forzar carga de la relación
+                _ = product.name  # Acceder a atributos básicos
+            
+            # Cargar categorías en el filtro
+            self.load_categories()
         finally:
             close_session()
+    
+    def load_categories(self):
+        """Carga las categorías de productos en el filtro"""
+        session = get_session()
+        try:
+            # Obtener categorías únicas de los productos cargados
+            categories_set = set()
+            for product in self.products_cache:
+                if product.category:
+                    categories_set.add(product.category.name)
+            
+            # Agregar categorías al combo box
+            for category_name in sorted(categories_set):
+                self.category_filter.addItem(category_name)
+            
+            # Conectar señal de cambio de categoría
+            self.category_filter.currentTextChanged.connect(self.on_category_changed)
+        finally:
+            close_session()
+    
+    def on_category_changed(self, category_name):
+        """Filtra productos cuando cambia la categoría"""
+        search_text = self.search_input.text().lower()
+        
+        # Filtrar productos
+        for i in range(self.products_grid.count()):
+            widget = self.products_grid.itemAt(i).widget()
+            if isinstance(widget, QPushButton):
+                product = widget.product
+                
+                # Filtrar por categoría
+                if category_name != "Todas las categorías":
+                    if not product.category or product.category.name != category_name:
+                        widget.setVisible(False)
+                        continue
+                
+                # Filtrar por búsqueda
+                matches_search = not search_text or \
+                    search_text in product.name.lower() or \
+                    search_text in product.sku.lower()
+                
+                widget.setVisible(matches_search)
     
     def build_products_gallery(self):
         """Construye la galería de productos"""
@@ -253,36 +332,103 @@ class ProductSelectionView(QWidget):
                 }
             """)
             
-            # Cargar imagen si existe
-            pix = QPixmap(f"resources/images/{product.sku}.png")
-            if pix.isNull():
-                pix = QPixmap(f"resources/images/{product.name}.png")
-            if not pix.isNull():
-                icon = QIcon(pix.scaled(60, 60, aspectRatioMode=Qt.AspectRatioMode.KeepAspectRatio, transformMode=Qt.TransformationMode.SmoothTransformation))
-                btn.setIcon(icon)
-                btn.setIconSize(pix.rect().size().scaled(60, 60, Qt.AspectRatioMode.KeepAspectRatio))
+            # Cargar imagen del producto
+            pix = None
+            if product.image_path:
+                # Construir ruta absoluta desde la raíz del proyecto
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                image_path = os.path.join(base_dir, product.image_path)
+                if os.path.exists(image_path):
+                    pix = QPixmap(image_path)
             
-            # Formatear precio
+            # Si no hay imagen o no se cargó, intentar rutas alternativas (retrocompatibilidad)
+            if not pix or pix.isNull():
+                # Intentar con SKU o nombre del producto
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                alt_paths = [
+                    os.path.join(base_dir, "resources", "images", f"{product.sku}.png"),
+                    os.path.join(base_dir, "resources", "images", f"{product.name}.png"),
+                ]
+                for alt_path in alt_paths:
+                    if os.path.exists(alt_path):
+                        pix = QPixmap(alt_path)
+                        if not pix.isNull():
+                            break
+            
+            # Configurar imagen en el botón si existe
+            if pix and not pix.isNull():
+                # Escalar imagen para que quepa bien en la tarjeta (90x90 para tarjeta de 140x120)
+                scaled_pix = pix.scaled(
+                    90, 90,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                icon = QIcon(scaled_pix)
+                btn.setIcon(icon)
+                btn.setIconSize(scaled_pix.size())
+                btn.setText("")  # No mostrar texto cuando hay imagen
+                # Configurar estilo del botón con imagen
+                btn.setStyleSheet("""
+                    QPushButton { 
+                        background-color: white; 
+                        border: 2px solid #e2e8f0; 
+                        border-radius: 8px; 
+                    }
+                    QPushButton:hover { 
+                        background-color: #f1f5f9; 
+                        border-color: #3b82f6;
+                        border-width: 3px;
+                    }
+                    QPushButton:pressed {
+                        background-color: #dbeafe;
+                        border-color: #1d4ed8;
+                    }
+                """)
+            else:
+                # Si no hay imagen, mostrar nombre y precio
+                # Formatear precio
+                if product.sale_price == int(product.sale_price):
+                    price_text = f"${int(product.sale_price):,}"
+                else:
+                    price_text = f"${product.sale_price:.2f}"
+                
+                # Dividir nombre largo en múltiples líneas
+                display_name = product.name
+                if len(product.name) > 15:
+                    words = product.name.split()
+                    if len(words) > 1:
+                        mid_point = len(words) // 2
+                        line1 = ' '.join(words[:mid_point])
+                        line2 = ' '.join(words[mid_point:])
+                        display_name = f"{line1}\n{line2}"
+                    else:
+                        mid_point = len(product.name) // 2
+                        display_name = f"{product.name[:mid_point]}\n{product.name[mid_point:]}"
+                
+                btn.setText(f"{display_name}\n{price_text}\nStock: {product.stock}")
+            
+            # Crear tooltip con información completa del producto
+            category_name = product.category.name if product.category else "Sin categoría"
             if product.sale_price == int(product.sale_price):
                 price_text = f"${int(product.sale_price):,}"
             else:
                 price_text = f"${product.sale_price:.2f}"
             
-            # Dividir nombre largo en múltiples líneas
-            display_name = product.name
-            if len(product.name) > 15:
-                words = product.name.split()
-                if len(words) > 1:
-                    mid_point = len(words) // 2
-                    line1 = ' '.join(words[:mid_point])
-                    line2 = ' '.join(words[mid_point:])
-                    display_name = f"{line1}\n{line2}"
-                else:
-                    mid_point = len(product.name) // 2
-                    display_name = f"{product.name[:mid_point]}\n{product.name[mid_point:]}"
+            tooltip_text = (
+                f"📦 {product.name}\n"
+                f"🏷️ SKU: {product.sku}\n"
+                f"💰 Precio: {price_text}\n"
+                f"📊 Stock: {product.stock}\n"
+                f"📁 Categoría: {category_name}\n"
+            )
+            if product.description:
+                tooltip_text += f"\n📝 {product.description[:100]}..."
+            tooltip_text += f"\n\n👆 Click para agregar (+1)"
             
-            btn.setText(f"{display_name}\n{price_text}\nStock: {product.stock}")
-            btn.setToolTip(f"Producto: {product.name}\nPrecio: {price_text}\nStock: {product.stock}\n\nClick para agregar (+1)")
+            btn.setToolTip(tooltip_text)
+            
+            # Guardar referencia al producto en el botón para facilitar la búsqueda
+            btn.product = product
             
             # Conectar click
             btn.clicked.connect(lambda checked=False, p=product: self.toggle_product_selection(p))
@@ -345,14 +491,33 @@ class ProductSelectionView(QWidget):
             self.btn_clear.setEnabled(True)
     
     def filter_products(self):
-        """Filtra productos por texto de búsqueda"""
+        """Filtra productos por texto de búsqueda (nombre o SKU)"""
         search_text = self.search_input.text().lower()
+        category_name = self.category_filter.currentText()
         
+        # Filtrar productos
         for i in range(self.products_grid.count()):
             widget = self.products_grid.itemAt(i).widget()
             if isinstance(widget, QPushButton):
-                product_name = widget.toolTip().split('\n')[0].replace('Producto: ', '').lower()
-                widget.setVisible(search_text in product_name)
+                # Si el botón tiene referencia al producto, buscar directamente
+                if hasattr(widget, 'product'):
+                    product = widget.product
+                    product_name = product.name.lower()
+                    product_sku = product.sku.lower()
+                    
+                    # Filtrar por categoría
+                    matches_category = True
+                    if category_name != "Todas las categorías":
+                        if not product.category or product.category.name != category_name:
+                            matches_category = False
+                    
+                    # Mostrar si coincide con nombre o SKU y categoría
+                    matches_search = not search_text or (search_text in product_name or search_text in product_sku)
+                    widget.setVisible(matches_category and matches_search)
+                else:
+                    # Fallback: buscar en el tooltip como antes
+                    tooltip_text = widget.toolTip().lower()
+                    widget.setVisible(search_text in tooltip_text)
     
     def continue_to_sale(self):
         """Continúa a la vista de completar venta"""

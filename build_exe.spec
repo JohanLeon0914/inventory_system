@@ -8,6 +8,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('data', 'data'),  # Incluir la carpeta de base de datos
+        ('resources', 'resources'),  # Incluir la carpeta de recursos (imágenes, iconos, etc.)
     ],
     hiddenimports=[
         'PyQt6.QtCore',

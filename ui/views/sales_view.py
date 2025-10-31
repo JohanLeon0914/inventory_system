@@ -1,6 +1,7 @@
 """
 Vista de Ventas - Sistema completo de registro de ventas
 """
+import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit, QMessageBox,
@@ -21,6 +22,7 @@ class SalesView(QWidget):
     def __init__(self):
         super().__init__()
         self.init_ui()
+        self.invoice_dialog = None
         self.load_sales()
     
     def init_ui(self):
@@ -105,6 +107,27 @@ class SalesView(QWidget):
         btn_new_sale.setFixedHeight(40)
         btn_new_sale.clicked.connect(self.create_new_sale)
         header_layout.addWidget(btn_new_sale)
+        
+        # Botón para editar información de la empresa
+        btn_company = QPushButton("🏢 Empresa")
+        btn_company.setFixedHeight(40)
+        btn_company.setFixedWidth(120)
+        btn_company.setStyleSheet("""
+            QPushButton {
+                background-color: #8b5cf6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 0 15px;
+            }
+            QPushButton:hover {
+                background-color: #7c3aed;
+            }
+        """)
+        btn_company.clicked.connect(self.edit_company_info)
+        header_layout.addWidget(btn_company)
         
         layout.addLayout(header_layout)
         
@@ -288,50 +311,98 @@ class SalesView(QWidget):
                 # Botones de acción
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(8, 5, 8, 5)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(0)
                 
-                btn_view = QPushButton("Ver Detalle")
-                btn_view.setFixedHeight(32)
-                btn_view.setMinimumWidth(100)
+                # Botón ver detalle (ícono 👁️, izquierda redondeada)
+                btn_view = QPushButton("👁️")
+                btn_view.setFixedSize(40, 32)
+                btn_view.setToolTip("Ver Detalle")
                 btn_view.setStyleSheet("""
                     QPushButton {
                         background-color: #2563eb;
                         color: white;
                         border: none;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: 500;
-                        padding: 4px 8px;
+                        border-top-left-radius: 4px;
+                        border-bottom-left-radius: 4px;
+                        border-top-right-radius: 0px;
+                        border-bottom-right-radius: 0px;
+                        font-size: 14px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #1d4ed8;
                     }
                 """)
                 btn_view.clicked.connect(lambda checked, s=sale: self.view_sale_detail(s))
-                
                 actions_layout.addWidget(btn_view)
                 
-                # Botón editar venta completa
-                btn_edit = QPushButton("Editar")
-                btn_edit.setFixedHeight(32)
-                btn_edit.setMinimumWidth(80)
-                btn_edit.setStyleSheet("""
-                    QPushButton {
-                        background-color: #f59e0b;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: 500;
-                        padding: 4px 8px;
-                    }
-                    QPushButton:hover {
-                        background-color: #d97706;
-                    }
-                """)
-                btn_edit.clicked.connect(lambda checked, s=sale: self.edit_sale_full(s))
-                actions_layout.addWidget(btn_edit)
+                # Botón editar (solo si no tiene factura) - sin bordes redondeados
+                if not sale.has_invoice:
+                    btn_edit = QPushButton("✏️")
+                    btn_edit.setFixedSize(40, 32)
+                    btn_edit.setToolTip("Editar")
+                    btn_edit.setStyleSheet("""
+                        QPushButton {
+                            background-color: #f59e0b;
+                            color: white;
+                            border: none;
+                            border-radius: 0px;
+                            font-size: 14px;
+                            padding: 0px;
+                        }
+                        QPushButton:hover {
+                            background-color: #d97706;
+                        }
+                    """)
+                    btn_edit.clicked.connect(lambda checked, s=sale: self.edit_sale_full(s))
+                    actions_layout.addWidget(btn_edit)
+                    
+                    # Botón generar factura (verde, derecha redondeada)
+                    btn_invoice = QPushButton("📄")
+                    btn_invoice.setFixedSize(40, 32)
+                    btn_invoice.setToolTip("Generar Factura")
+                    btn_invoice.setStyleSheet("""
+                        QPushButton {
+                            background-color: #10b981;
+                            color: white;
+                            border: none;
+                            border-top-left-radius: 0px;
+                            border-bottom-left-radius: 0px;
+                            border-top-right-radius: 4px;
+                            border-bottom-right-radius: 4px;
+                            font-size: 14px;
+                            padding: 0px;
+                        }
+                        QPushButton:hover {
+                            background-color: #059669;
+                        }
+                    """)
+                    btn_invoice.clicked.connect(lambda checked, s=sale: self.generate_invoice(s))
+                    actions_layout.addWidget(btn_invoice)
+                else:
+                    # Mostrar que ya tiene factura (verde, derecha redondeada)
+                    btn_invoice_view = QPushButton("✅")
+                    btn_invoice_view.setFixedSize(40, 32)
+                    btn_invoice_view.setToolTip("Ver Factura")
+                    btn_invoice_view.setStyleSheet("""
+                        QPushButton {
+                            background-color: #10b981;
+                            color: white;
+                            border: none;
+                            border-top-left-radius: 0px;
+                            border-bottom-left-radius: 0px;
+                            border-top-right-radius: 4px;
+                            border-bottom-right-radius: 4px;
+                            font-size: 14px;
+                            padding: 0px;
+                        }
+                        QPushButton:hover {
+                            background-color: #059669;
+                        }
+                    """)
+                    btn_invoice_view.clicked.connect(lambda checked, s=sale: self.view_invoice(s))
+                    actions_layout.addWidget(btn_invoice_view)
                 
                 self.table.setCellWidget(row, 6, actions_widget)
                 self.table.setRowHeight(row, 50)
@@ -416,6 +487,52 @@ class SalesView(QWidget):
         dialog = EditSaleFullDialog(self, sale.id)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_sales()
+    
+    def generate_invoice(self, sale):
+        """Genera una factura legal colombiana para la venta"""
+        from ui.views.invoice_dialog import InvoiceDialog
+        
+        # Confirmar generación
+        reply = QMessageBox.question(
+            self, "Confirmar Factura",
+            f"¿Generar factura legal para la venta {sale.invoice_number}?\n\n"
+            "Una vez generada, NO se podrá editar la venta.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.No:
+            return
+        
+        # Abrir diálogo de factura
+        dialog = InvoiceDialog(self, sale)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Marcar la venta como con factura
+            session = get_session()
+            try:
+                updated_sale = session.query(Sale).filter_by(id=sale.id).first()
+                if updated_sale:
+                    updated_sale.has_invoice = 1
+                    updated_sale.invoice_generated_at = datetime.now()
+                    session.commit()
+                    self.load_sales()
+                    QMessageBox.information(self, "Éxito", "Factura generada correctamente.")
+            except Exception as e:
+                session.rollback()
+                QMessageBox.critical(self, "Error", f"Error al marcar factura: {str(e)}")
+            finally:
+                close_session()
+    
+    def view_invoice(self, sale):
+        """Muestra la factura generada"""
+        from ui.views.invoice_dialog import InvoiceDialog
+        dialog = InvoiceDialog(self, sale)
+        dialog.exec()
+    
+    def edit_company_info(self):
+        """Abre el diálogo para editar la información de la empresa"""
+        from ui.views.company_info_dialog import CompanyInfoDialog
+        dialog = CompanyInfoDialog(self)
+        dialog.exec()
     
     def edit_sale_basic(self, sale):
         """Permite editar método de pago, estado, impuesto y descuento. No cambia items ni stock."""
@@ -1023,6 +1140,16 @@ class EditSaleDialog(QDialog):
                         previous_stock = product.stock
                         product.stock += item.quantity
                         
+                        # Buscar y anular el movimiento de venta original
+                        original_movement = session.query(InventoryMovement).filter(
+                            InventoryMovement.reference == f"SALE-{sale.id}",
+                            InventoryMovement.product_id == product.id
+                        ).first()
+                        
+                        if original_movement:
+                            # Anular el movimiento original agregando nota
+                            original_movement.note = f"[ANULADO] Cancelación de venta {sale.invoice_number}"
+                        
                         # Registrar movimiento de devolución
                         movement = InventoryMovement(
                             product_id=product.id,
@@ -1030,7 +1157,8 @@ class EditSaleDialog(QDialog):
                             quantity=item.quantity,
                             previous_stock=previous_stock,
                             new_stock=product.stock,
-                            reason=f"Devolución por cancelación de venta {sale.invoice_number}"
+                            reason=f"Devolución por cancelación de venta {sale.invoice_number}",
+                            reference=f"CANCELLED-SALE-{sale.id}"  # Referencia a venta cancelada
                         )
                         session.add(movement)
                         
@@ -1101,6 +1229,8 @@ class EditSaleFullDialog(QDialog):
             self.sale_invoice = sale.invoice_number
             self.sale_customer_id = sale.customer_id
             self.sale_payment_method = sale.payment_method
+            self.sale_tax = sale.tax or 0.0  # Cargar impuesto de la venta
+            self.sale_transfer_type = sale.transfer_type if sale.transfer_type else None  # Cargar tipo de transferencia
             
             # Cargar items originales
             for item in sale.items:
@@ -1144,6 +1274,15 @@ class EditSaleFullDialog(QDialog):
                 color: #0f172a;
                 font-weight: bold;
             }
+            QToolTip {
+                background-color: #ffffff;
+                color: #0f172a;
+                border: 2px solid #3b82f6;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: normal;
+            }
         """)
         
         layout = QVBoxLayout(self)
@@ -1157,6 +1296,40 @@ class EditSaleFullDialog(QDialog):
         # Cliente
         self.customer_combo = QComboBox()
         self.customer_combo.setMinimumHeight(35)
+        self.customer_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #0f172a;
+                border: 2px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                padding: 4px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: transparent;
+                width: 30px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 7px solid #64748b;
+                margin-right: 5px;
+            }
+        """)
         self.load_customers()
         # Seleccionar cliente actual
         if self.sale_customer_id:
@@ -1176,7 +1349,113 @@ class EditSaleFullDialog(QDialog):
             if self.payment_method_combo.itemData(i) == self.sale_payment_method:
                 self.payment_method_combo.setCurrentIndex(i)
                 break
+        self.payment_method_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #0f172a;
+                border: 2px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                padding: 4px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: transparent;
+                width: 30px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 7px solid #64748b;
+                margin-right: 5px;
+            }
+        """)
+        self.payment_method_combo.currentIndexChanged.connect(self.on_payment_method_changed)
         top_layout.addRow("Método de Pago:", self.payment_method_combo)
+        
+        # Tipo de transferencia (oculto inicialmente)
+        self.transfer_type_label = QLabel("Tipo de Transferencia:")
+        self.transfer_type_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
+        self.transfer_type_label.setVisible(False)
+        
+        self.transfer_type_combo = QComboBox()
+        self.transfer_type_combo.setMinimumHeight(35)
+        self.transfer_type_combo.addItems(["Nequi", "Daviplata", "Bancolombia", "Otro"])
+        self.transfer_type_combo.setVisible(False)
+        self.transfer_type_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white;
+                color: #0f172a;
+                border: 2px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            QComboBox:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                padding: 4px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: transparent;
+                width: 30px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 7px solid #64748b;
+                margin-right: 5px;
+            }
+        """)
+        self.transfer_type_combo.currentIndexChanged.connect(self.on_transfer_type_changed)
+        top_layout.addRow(self.transfer_type_label, self.transfer_type_combo)
+        
+        # Campo para "Otro" tipo de transferencia
+        self.other_transfer_label = QLabel("Especifique:")
+        self.other_transfer_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
+        self.other_transfer_label.setVisible(False)
+        
+        self.other_transfer_input = QLineEdit()
+        self.other_transfer_input.setMinimumHeight(35)
+        self.other_transfer_input.setPlaceholderText("Ej: Paypal, Bitcoin, etc.")
+        self.other_transfer_input.setVisible(False)
+        self.other_transfer_input.setStyleSheet("""
+            QLineEdit {
+                background-color: white;
+                color: #0f172a;
+                border: 2px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: #3b82f6;
+                outline: none;
+            }
+        """)
+        top_layout.addRow(self.other_transfer_label, self.other_transfer_input)
         
         top_section.setLayout(top_layout)
         layout.addWidget(top_section)
@@ -1257,6 +1536,7 @@ class EditSaleFullDialog(QDialog):
             QTableWidget::item {
                 padding: 8px;
                 border-bottom: 1px solid #f1f5f9;
+                color: #0f172a;
             }
             QTableWidget::item:selected {
                 background-color: #dbeafe;
@@ -1268,6 +1548,7 @@ class EditSaleFullDialog(QDialog):
                 border: none;
                 border-bottom: 2px solid #e2e8f0;
                 font-weight: bold;
+                color: #0f172a;
             }
             QScrollBar:vertical {
                 background-color: #f1f5f9;
@@ -1303,7 +1584,7 @@ class EditSaleFullDialog(QDialog):
         self.items_table.setColumnWidth(1, 120)
         self.items_table.setColumnWidth(2, 100)
         self.items_table.setColumnWidth(3, 120)
-        self.items_table.setColumnWidth(4, 100)
+        self.items_table.setColumnWidth(4, 180)  # Acciones (más ancho para dos botones)
         
         # Configurar scroll y comportamiento - AsNeeded para que aparezca dinámicamente
         self.items_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -1324,7 +1605,7 @@ class EditSaleFullDialog(QDialog):
         totals_layout = QHBoxLayout()
         
         totals_group = QGroupBox("Totales y Pago")
-        totals_group.setMaximumHeight(180)
+        totals_group.setMaximumHeight(250)
         totals_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -1345,6 +1626,43 @@ class EditSaleFullDialog(QDialog):
         totals_form.setSpacing(6)
         totals_form.setContentsMargins(10, 5, 10, 5)
         
+        # Subtotal
+        subtotal_label_title = QLabel("Subtotal:")
+        subtotal_label_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
+        
+        self.subtotal_label = QLabel("$0")
+        self.subtotal_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #64748b; background-color: #f8fafc; padding: 5px; border-radius: 4px;")
+        totals_form.addRow(subtotal_label_title, self.subtotal_label)
+        
+        # Impuesto
+        tax_label = QLabel("Impuesto:")
+        tax_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
+        
+        self.tax_input = QDoubleSpinBox()
+        self.tax_input.setMinimum(0)
+        self.tax_input.setMaximum(999999.99)
+        self.tax_input.setDecimals(2)
+        self.tax_input.setPrefix("$ ")
+        self.tax_input.setMinimumHeight(32)
+        self.tax_input.setMinimumWidth(120)
+        self.tax_input.setValue(0.0)
+        self.tax_input.setStyleSheet("""
+            QDoubleSpinBox {
+                font-size: 13px;
+                padding: 4px;
+                background-color: white;
+                border: 2px solid #e2e8f0;
+                border-radius: 4px;
+                color: #0f172a;
+            }
+            QDoubleSpinBox:focus {
+                border-color: #3b82f6;
+            }
+        """)
+        self.tax_input.valueChanged.connect(self.calculate_total)
+        totals_form.addRow(tax_label, self.tax_input)
+        
+        # Total
         total_label_title = QLabel("TOTAL:")
         total_label_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #0f172a;")
         
@@ -1386,6 +1704,39 @@ class EditSaleFullDialog(QDialog):
         totals_layout.addWidget(totals_group)
         
         layout.addLayout(totals_layout)
+        
+        # Cargar impuesto si existe (después de crear el campo tax_input)
+        if hasattr(self, 'sale_tax'):
+            self.tax_input.setValue(self.sale_tax)
+        
+        # Cargar tipo de transferencia si existe (después de crear los campos)
+        if hasattr(self, 'sale_transfer_type'):
+            # Verificar si el método de pago es Transferencia
+            if self.sale_payment_method == PaymentMethod.TRANSFER:
+                self.transfer_type_label.setVisible(True)
+                self.transfer_type_combo.setVisible(True)
+                
+                if self.sale_transfer_type:
+                    # Buscar el tipo en el combo o agregarlo si es "Otro"
+                    transfer_type = self.sale_transfer_type
+                    index = self.transfer_type_combo.findText(transfer_type)
+                    if index >= 0:
+                        self.transfer_type_combo.setCurrentIndex(index)
+                    else:
+                        # Si no está en la lista, es un tipo "Otro"
+                        self.transfer_type_combo.setCurrentText("Otro")
+                        self.other_transfer_input.setText(transfer_type)
+                        self.other_transfer_label.setVisible(True)
+                        self.other_transfer_input.setVisible(True)
+                else:
+                    # Si no hay tipo guardado, mostrar solo el selector
+                    self.transfer_type_combo.setCurrentIndex(0)
+            else:
+                # Si el método de pago no es Transferencia, asegurar que los campos estén ocultos
+                self.transfer_type_label.setVisible(False)
+                self.transfer_type_combo.setVisible(False)
+                self.other_transfer_label.setVisible(False)
+                self.other_transfer_input.setVisible(False)
         
         # Calcular total inicial
         self.calculate_total()
@@ -1462,6 +1813,50 @@ class EditSaleFullDialog(QDialog):
         except Exception:
             pass
     
+    def on_payment_method_changed(self):
+        """Maneja el cambio en el método de pago"""
+        current_method = self.payment_method_combo.currentData()
+        
+        # Mostrar campos de transferencia solo si se selecciona Transferencia
+        is_transfer = current_method == PaymentMethod.TRANSFER
+        
+        self.transfer_type_label.setVisible(is_transfer)
+        self.transfer_type_combo.setVisible(is_transfer)
+        
+        # Si no es transferencia, ocultar también el campo "Otro"
+        if not is_transfer:
+            self.other_transfer_label.setVisible(False)
+            self.other_transfer_input.setVisible(False)
+        else:
+            # Si es transferencia, verificar si seleccionaron "Otro"
+            self.on_transfer_type_changed()
+    
+    def on_transfer_type_changed(self):
+        """Maneja el cambio en el tipo de transferencia"""
+        # Mostrar campo "Otro" solo si se selecciona "Otro"
+        show_other = self.transfer_type_combo.currentText() == "Otro"
+        self.other_transfer_label.setVisible(show_other)
+        self.other_transfer_input.setVisible(show_other)
+        
+        # Limpiar el campo si se cambia a otra opción
+        if not show_other:
+            self.other_transfer_input.clear()
+    
+    def get_transfer_type(self):
+        """Obtiene el tipo de transferencia según la selección"""
+        current_method = self.payment_method_combo.currentData()
+        
+        if current_method != PaymentMethod.TRANSFER:
+            return None
+        
+        transfer_type = self.transfer_type_combo.currentText()
+        if transfer_type == "Otro":
+            # Usar el valor del campo de texto si está especificado
+            other_text = self.other_transfer_input.text().strip()
+            return other_text if other_text else "Otro"
+        
+        return transfer_type
+    
     def load_customers(self):
         """Carga los clientes disponibles"""
         session = get_session()
@@ -1477,7 +1872,15 @@ class EditSaleFullDialog(QDialog):
         """Carga los productos disponibles"""
         session = get_session()
         try:
-            self._products_cache = session.query(Product).filter(Product.stock > 0).all()
+            from sqlalchemy.orm import joinedload
+            # Cargar productos con sus categorías usando joinedload
+            self._products_cache = session.query(Product).options(
+                joinedload(Product.category)
+            ).filter(Product.stock > 0).all()
+            # Acceder a las relaciones ahora para que se carguen antes de cerrar la sesión
+            for product in self._products_cache:
+                _ = product.category  # Forzar carga de la relación
+                _ = product.name  # Acceder a atributos básicos
         finally:
             close_session()
     
@@ -1513,36 +1916,95 @@ class EditSaleFullDialog(QDialog):
                     border-color: #3b82f6;
                 }
             """)
-            pix = QPixmap(f"resources/images/{product.sku}.png")
-            if pix.isNull():
-                pix = QPixmap(f"resources/images/{product.name}.png")
-            if not pix.isNull():
-                icon = QIcon(pix.scaled(50, 50, aspectRatioMode=Qt.AspectRatioMode.KeepAspectRatio, transformMode=Qt.TransformationMode.SmoothTransformation))
+            # Cargar imagen del producto
+            pix = None
+            if product.image_path:
+                # Construir ruta absoluta desde la raíz del proyecto
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                image_path = os.path.join(base_dir, product.image_path)
+                if os.path.exists(image_path):
+                    pix = QPixmap(image_path)
+            
+            # Si no hay imagen o no se cargó, intentar rutas alternativas (retrocompatibilidad)
+            if not pix or pix.isNull():
+                # Intentar con SKU o nombre del producto
+                base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                alt_paths = [
+                    os.path.join(base_dir, "resources", "images", f"{product.sku}.png"),
+                    os.path.join(base_dir, "resources", "images", f"{product.name}.png"),
+                ]
+                for alt_path in alt_paths:
+                    if os.path.exists(alt_path):
+                        pix = QPixmap(alt_path)
+                        if not pix.isNull():
+                            break
+            
+            # Configurar imagen en el botón si existe
+            if pix and not pix.isNull():
+                # Escalar imagen para que quepa bien en la tarjeta (80x80 para tarjeta de 120x100)
+                scaled_pix = pix.scaled(
+                    80, 80,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                icon = QIcon(scaled_pix)
                 btn.setIcon(icon)
-                btn.setIconSize(pix.rect().size().scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio))
+                btn.setIconSize(scaled_pix.size())
+                btn.setText("")  # No mostrar texto cuando hay imagen
+                # Configurar estilo del botón con imagen
+                btn.setStyleSheet("""
+                    QPushButton { 
+                        background-color: white; 
+                        border: 1px solid #e2e8f0; 
+                        border-radius: 6px; 
+                    }
+                    QPushButton:hover { 
+                        background-color: #f1f5f9; 
+                        border-color: #3b82f6;
+                        border-width: 2px;
+                    }
+                """)
+            else:
+                # Si no hay imagen, mostrar nombre y precio
+                if product.sale_price == int(product.sale_price):
+                    price_text = f"${int(product.sale_price):,}"
+                else:
+                    price_text = f"${product.sale_price:.2f}"
+                
+                # Dividir nombre largo en múltiples líneas
+                display_name = product.name
+                if len(product.name) > 12:
+                    words = product.name.split()
+                    if len(words) > 1:
+                        mid_point = len(words) // 2
+                        line1 = ' '.join(words[:mid_point])
+                        line2 = ' '.join(words[mid_point:])
+                        display_name = f"{line1}\n{line2}"
+                    else:
+                        mid_point = len(product.name) // 2
+                        display_name = f"{product.name[:mid_point]}\n{product.name[mid_point:]}"
+                
+                btn.setText(f"{display_name}\n{price_text}")
+            
+            # Crear tooltip con información completa del producto
+            category_name = product.category.name if product.category else "Sin categoría"
             if product.sale_price == int(product.sale_price):
                 price_text = f"${int(product.sale_price):,}"
             else:
                 price_text = f"${product.sale_price:.2f}"
             
-            # Dividir nombre largo en múltiples líneas
-            display_name = product.name
-            if len(product.name) > 12:
-                # Dividir el nombre en palabras y hacer saltos de línea
-                words = product.name.split()
-                if len(words) > 1:
-                    # Si tiene espacios, dividir en 2 líneas
-                    mid_point = len(words) // 2
-                    line1 = ' '.join(words[:mid_point])
-                    line2 = ' '.join(words[mid_point:])
-                    display_name = f"{line1}\n{line2}"
-                else:
-                    # Si es una sola palabra larga, dividir por caracteres
-                    mid_point = len(product.name) // 2
-                    display_name = f"{product.name[:mid_point]}\n{product.name[mid_point:]}"
+            tooltip_text = (
+                f"📦 {product.name}\n"
+                f"🏷️ SKU: {product.sku}\n"
+                f"💰 Precio: {price_text}\n"
+                f"📊 Stock: {product.stock}\n"
+                f"📁 Categoría: {category_name}\n"
+            )
+            if product.description:
+                tooltip_text += f"\n📝 {product.description[:100]}..."
+            tooltip_text += f"\n\n👆 Click agrega 1 unidad."
             
-            btn.setText(f"{display_name}\n{price_text}")
-            btn.setToolTip(f"Producto: {product.name}\nPrecio: {price_text}\nClick agrega 1 unidad.")
+            btn.setToolTip(tooltip_text)
             btn.clicked.connect(lambda checked=False, p=product: self.quick_add_product(p, 1))
             self.products_grid.addWidget(btn, row, col)
             col += 1
@@ -1611,10 +2073,35 @@ class EditSaleFullDialog(QDialog):
             subtotal_item.setFont(QFont("Arial", 11, QFont.Weight.Bold))
             self.items_table.setItem(row, 3, subtotal_item)
             
+            # Botones de acciones: sumar y restar
+            actions_widget = QWidget()
+            actions_layout = QHBoxLayout(actions_widget)
+            actions_layout.setContentsMargins(4, 4, 4, 4)
+            actions_layout.setSpacing(4)
+            
+            # Botón sumar cantidad
+            btn_increase = QPushButton("➕ +1")
+            btn_increase.setFixedHeight(32)
+            btn_increase.setFixedWidth(80)
+            btn_increase.setStyleSheet("""
+                QPushButton {
+                    background-color: #10b981;
+                    color: white;
+                    font-weight: bold;
+                    font-size: 11px;
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #059669;
+                }
+            """)
+            btn_increase.clicked.connect(lambda checked, r=row: self.increase_item_quantity(r))
+            actions_layout.addWidget(btn_increase)
+            
             # Botón reducir cantidad
             btn_reduce = QPushButton("➖ -1")
             btn_reduce.setFixedHeight(32)
-            btn_reduce.setFixedWidth(90)
+            btn_reduce.setFixedWidth(80)
             btn_reduce.setStyleSheet("""
                 QPushButton {
                     background-color: #f59e0b;
@@ -1628,12 +2115,36 @@ class EditSaleFullDialog(QDialog):
                 }
             """)
             btn_reduce.clicked.connect(lambda checked, r=row: self.reduce_item_quantity(r))
-            self.items_table.setCellWidget(row, 4, btn_reduce)
+            actions_layout.addWidget(btn_reduce)
+            
+            self.items_table.setCellWidget(row, 4, actions_widget)
             
             self.items_table.setRowHeight(row, 45)
         
         # Conectar señal para detectar cambios en cantidad
         self.items_table.itemChanged.connect(self.on_quantity_changed)
+    
+    def increase_item_quantity(self, row):
+        """Aumenta la cantidad de un item en 1"""
+        if row < len(self.sale_items):
+            # Necesitamos verificar stock disponible desde la base de datos
+            session = get_session()
+            try:
+                from models import Product
+                product_id = self.sale_items[row]['product_id']
+                product = session.query(Product).filter_by(id=product_id).first()
+                if product:
+                    if self.sale_items[row]['quantity'] >= product.stock:
+                        QMessageBox.warning(self, "Stock insuficiente", 
+                            f"Solo hay {product.stock} unidades disponibles")
+                        return
+                    
+                    self.sale_items[row]['quantity'] += 1
+                    self.sale_items[row]['subtotal'] = self.sale_items[row]['quantity'] * self.sale_items[row]['unit_price']
+                    self.update_items_table()
+                    self.calculate_total()
+            finally:
+                close_session()
     
     def reduce_item_quantity(self, row):
         """Reduce la cantidad de un item en 1, o lo elimina si llega a 0"""
@@ -1681,9 +2192,19 @@ class EditSaleFullDialog(QDialog):
                     item.setText(str(self.sale_items[row]['quantity']))
     
     def calculate_total(self):
-        """Calcula los totales"""
-        total = sum(item['subtotal'] for item in self.sale_items)
+        """Calcula los totales incluyendo impuesto"""
+        subtotal = sum(item['subtotal'] for item in self.sale_items)
+        tax = self.tax_input.value() if hasattr(self, 'tax_input') else 0.0
+        total = subtotal + tax
         
+        # Actualizar subtotal
+        if subtotal == int(subtotal):
+            formatted_subtotal = f"${int(subtotal):,}"
+        else:
+            formatted_subtotal = f"${subtotal:,.2f}"
+        self.subtotal_label.setText(formatted_subtotal)
+        
+        # Actualizar total
         if total == int(total):
             formatted_total = f"${int(total):,}"
         else:
@@ -1699,7 +2220,9 @@ class EditSaleFullDialog(QDialog):
     def update_change(self):
         """Actualiza el cambio"""
         try:
-            total = sum(item['subtotal'] for item in self.sale_items)
+            subtotal = sum(item['subtotal'] for item in self.sale_items)
+            tax = self.tax_input.value() if hasattr(self, 'tax_input') else 0.0
+            total = subtotal + tax
             
             payment_text = self.cash_given_edit.text().strip()
             if not payment_text:
@@ -1766,6 +2289,16 @@ class EditSaleFullDialog(QDialog):
                     previous_stock = product.stock
                     product.stock += orig_item['quantity']
                     
+                    # Buscar y anular el movimiento de venta original
+                    original_movement = session.query(InventoryMovement).filter(
+                        InventoryMovement.reference == f"SALE-{sale.id}",
+                        InventoryMovement.product_id == product.id
+                    ).first()
+                    
+                    if original_movement:
+                        # Anular el movimiento original agregando nota
+                        original_movement.note = f"[ANULADO] Cancelación de venta {self.sale_invoice}"
+                    
                     # Registrar movimiento de devolución
                     movement = InventoryMovement(
                         product_id=product.id,
@@ -1773,7 +2306,8 @@ class EditSaleFullDialog(QDialog):
                         quantity=orig_item['quantity'],
                         previous_stock=previous_stock,
                         new_stock=product.stock,
-                        reason=f"Devolución por cancelación de venta {self.sale_invoice}"
+                        reason=f"Devolución por cancelación de venta {self.sale_invoice}",
+                        reference=f"CANCELLED-SALE-{sale.id}"  # Referencia a venta cancelada
                     )
                     session.add(movement)
                     
@@ -1936,7 +2470,8 @@ class EditSaleFullDialog(QDialog):
             # Actualizar datos de la venta
             sale.customer_id = self.customer_combo.currentData()
             sale.payment_method = self.payment_method_combo.currentData()
-            sale.tax = 0
+            sale.tax = self.tax_input.value() if hasattr(self, 'tax_input') else 0.0  # Guardar impuesto
+            sale.transfer_type = self.get_transfer_type()  # Guardar tipo de transferencia
             sale.discount = 0
             sale.status = SaleStatus.EDITED  # Marcar como editada
             sale.calculate_total()

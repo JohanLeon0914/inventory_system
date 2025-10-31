@@ -1,16 +1,20 @@
 """
 Vista de Productos - Gestión completa de productos
 """
+import os
+import shutil
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit, QMessageBox,
     QDialog, QFormLayout, QSpinBox, QDoubleSpinBox, QComboBox,
-    QTextEdit, QHeaderView, QSizePolicy, QGroupBox, QScrollArea
+    QTextEdit, QHeaderView, QSizePolicy, QGroupBox, QScrollArea,
+    QFileDialog
 )
-from PyQt6.QtGui import QDoubleValidator, QShowEvent
+from PyQt6.QtGui import QDoubleValidator, QShowEvent, QPixmap
 from PyQt6.QtCore import Qt
 from config.database import get_session, close_session
-from models import Product, Category, RawMaterial, ProductMaterial
+from models import Product, Category, RawMaterial, ProductMaterial, InventoryMovement, MovementType
+from ui.views.increase_stock_dialogs import IncreaseStockDialog, IncreaseStockAllDialog
 
 class ProductsView(QWidget):
     """Vista para gestionar productos"""
@@ -66,6 +70,26 @@ class ProductsView(QWidget):
         btn_add.setFixedHeight(40)
         btn_add.clicked.connect(self.add_product)
         header_layout.addWidget(btn_add)
+        
+        # Botón para aumentar stock a todos los productos
+        btn_add_stock_all = QPushButton("📈 Aumentar Stock a Todos")
+        btn_add_stock_all.setFixedHeight(40)
+        btn_add_stock_all.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 0 15px;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        btn_add_stock_all.clicked.connect(self.increase_stock_all_products)
+        header_layout.addWidget(btn_add_stock_all)
         
         layout.addLayout(header_layout)
         
@@ -162,48 +186,74 @@ class ProductsView(QWidget):
                 # Botones de acción
                 actions_widget = QWidget()
                 actions_layout = QHBoxLayout(actions_widget)
-                actions_layout.setContentsMargins(8, 5, 8, 5)
-                actions_layout.setSpacing(8)
+                actions_layout.setContentsMargins(4, 2, 4, 2)
+                actions_layout.setSpacing(0)
                 
-                btn_edit = QPushButton("Editar")
-                btn_edit.setMinimumWidth(80)
-                btn_edit.setFixedHeight(32)
+                # Botón agregar stock (verde, izquierda redondeada)
+                btn_add_stock = QPushButton("➕")
+                btn_add_stock.setFixedSize(40, 32)
+                btn_add_stock.setToolTip("Aumentar stock")
+                btn_add_stock.setStyleSheet("""
+                    QPushButton {
+                        background-color: #10b981;
+                        color: white;
+                        border: none;
+                        border-top-left-radius: 4px;
+                        border-bottom-left-radius: 4px;
+                        border-top-right-radius: 0px;
+                        border-bottom-right-radius: 0px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        padding: 0px;
+                    }
+                    QPushButton:hover {
+                        background-color: #059669;
+                    }
+                """)
+                btn_add_stock.clicked.connect(lambda checked, p=product: self.increase_product_stock(p))
+                actions_layout.addWidget(btn_add_stock)
+                
+                # Botón editar (azul, sin bordes redondeados)
+                btn_edit = QPushButton("✏️")
+                btn_edit.setFixedSize(40, 32)
+                btn_edit.setToolTip("Editar producto")
                 btn_edit.setStyleSheet("""
                     QPushButton {
                         background-color: #2563eb;
                         color: white;
                         border: none;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: 500;
-                        padding: 4px 8px;
+                        border-radius: 0px;
+                        font-size: 14px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #1d4ed8;
                     }
                 """)
                 btn_edit.clicked.connect(lambda checked, p=product: self.edit_product(p))
+                actions_layout.addWidget(btn_edit)
                 
-                btn_delete = QPushButton("Eliminar")
-                btn_delete.setMinimumWidth(80)
-                btn_delete.setFixedHeight(32)
+                # Botón eliminar (rojo, derecha redondeada)
+                btn_delete = QPushButton("🗑️")
+                btn_delete.setFixedSize(40, 32)
+                btn_delete.setToolTip("Eliminar producto")
                 btn_delete.setStyleSheet("""
                     QPushButton {
                         background-color: #ef4444;
                         color: white;
                         border: none;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: 500;
-                        padding: 4px 8px;
+                        border-top-left-radius: 0px;
+                        border-bottom-left-radius: 0px;
+                        border-top-right-radius: 4px;
+                        border-bottom-right-radius: 4px;
+                        font-size: 14px;
+                        padding: 0px;
                     }
                     QPushButton:hover {
                         background-color: #dc2626;
                     }
                 """)
                 btn_delete.clicked.connect(lambda checked, p=product: self.delete_product(p))
-                
-                actions_layout.addWidget(btn_edit)
                 actions_layout.addWidget(btn_delete)
                 
                 self.table.setCellWidget(row, 6, actions_widget)
@@ -249,6 +299,18 @@ class ProductsView(QWidget):
     def edit_product(self, product):
         """Abre diálogo para editar producto"""
         dialog = ProductDialog(self, product)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_products()
+    
+    def increase_product_stock(self, product):
+        """Abre diálogo para aumentar stock de un producto específico"""
+        dialog = IncreaseStockDialog(self, product)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.load_products()
+    
+    def increase_stock_all_products(self):
+        """Abre diálogo para aumentar stock a todos los productos"""
+        dialog = IncreaseStockAllDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_products()
     
@@ -656,6 +718,9 @@ class ProductDialog(QDialog):
         self.product = product
         self.is_editing = product is not None
         self.materials_data = []  # Lista de materias primas asociadas
+        self.current_image_path = None  # Ruta de la imagen seleccionada
+        self.original_image_path = None  # Ruta original de la imagen (para edición)
+        self.image_changed = False  # Indica si la imagen fue modificada
         self.init_ui()
         
         if self.is_editing:
@@ -674,6 +739,15 @@ class ProductDialog(QDialog):
             }
             QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
                 color: #0f172a;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                outline: none;
             }
         """)
         
@@ -731,6 +805,72 @@ class ProductDialog(QDialog):
         form_layout.addRow("Stock Mínimo:", self.min_stock_input)
         
         layout.addLayout(form_layout)
+        
+        # Sección de Imagen
+        image_group = QGroupBox("Imagen del Producto")
+        image_layout = QVBoxLayout()
+        
+        image_control_layout = QHBoxLayout()
+        
+        btn_select_image = QPushButton("📁 Seleccionar Imagen")
+        btn_select_image.setMinimumHeight(35)
+        btn_select_image.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 500;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        btn_select_image.clicked.connect(self.select_image)
+        image_control_layout.addWidget(btn_select_image)
+        
+        btn_remove_image = QPushButton("🗑️ Eliminar Imagen")
+        btn_remove_image.setMinimumHeight(35)
+        btn_remove_image.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 500;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+            }
+        """)
+        btn_remove_image.clicked.connect(self.remove_image)
+        image_control_layout.addWidget(btn_remove_image)
+        
+        image_control_layout.addStretch()
+        image_layout.addLayout(image_control_layout)
+        
+        # Vista previa de imagen
+        self.image_label = QLabel()
+        self.image_label.setMinimumHeight(200)
+        self.image_label.setMaximumHeight(300)
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_label.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #cbd5e1;
+                border-radius: 8px;
+                background-color: #f8fafc;
+            }
+        """)
+        self.image_label.setText("No hay imagen seleccionada")
+        self.current_image_path = None
+        image_layout.addWidget(self.image_label)
+        
+        image_group.setLayout(image_layout)
+        layout.addWidget(image_group)
         
         # Sección de Materias Primas
         materials_group = QGroupBox("Materias Primas Requeridas")
@@ -871,6 +1011,94 @@ class ProductDialog(QDialog):
             btn_remove.clicked.connect(lambda checked, mid=mat_data['id']: self.remove_material_from_list(mid))
             self.materials_table.setCellWidget(row, 3, btn_remove)
     
+    def select_image(self):
+        """Abre el diálogo para seleccionar una imagen"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar Imagen",
+            "",
+            "Imágenes (*.png *.jpg *.jpeg *.bmp *.gif);;Todos los archivos (*)"
+        )
+        
+        if file_path:
+            self.current_image_path = file_path
+            self.image_changed = True
+            self.display_image(file_path)
+    
+    def remove_image(self):
+        """Elimina la imagen seleccionada"""
+        self.current_image_path = None
+        self.image_changed = True
+        self.image_label.clear()
+        self.image_label.setText("No hay imagen seleccionada")
+    
+    def display_image(self, image_path):
+        """Muestra una vista previa de la imagen"""
+        if not image_path or not os.path.exists(image_path):
+            self.image_label.setText("Imagen no encontrada")
+            return
+        
+        pixmap = QPixmap(image_path)
+        if pixmap.isNull():
+            self.image_label.setText("Error al cargar imagen")
+            return
+        
+        # Escalar la imagen para que quepa en el área de vista previa
+        # Usar un tamaño máximo de 250x250 para la vista previa
+        max_size = 250
+        if pixmap.width() > max_size or pixmap.height() > max_size:
+            scaled_pixmap = pixmap.scaled(
+                max_size, max_size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+        else:
+            scaled_pixmap = pixmap
+        
+        self.image_label.setPixmap(scaled_pixmap)
+    
+    def get_image_directory(self):
+        """Obtiene el directorio donde se guardarán las imágenes de productos"""
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        image_dir = os.path.join(base_dir, 'resources', 'images', 'products')
+        os.makedirs(image_dir, exist_ok=True)
+        return image_dir
+    
+    def save_image_to_resources(self, source_path, product_id):
+        """Copia la imagen a la carpeta de recursos y retorna la ruta relativa"""
+        if not source_path or not os.path.exists(source_path):
+            return None
+        
+        try:
+            image_dir = self.get_image_directory()
+            _, ext = os.path.splitext(source_path)
+            filename = f"product_{product_id}{ext}"
+            dest_path = os.path.join(image_dir, filename)
+            
+            # Si ya existe una imagen para este producto, eliminarla
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            
+            # Copiar la nueva imagen
+            shutil.copy2(source_path, dest_path)
+            
+            # Retornar ruta relativa desde la raíz del proyecto
+            return os.path.join('resources', 'images', 'products', filename)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Error al guardar imagen: {str(e)}")
+            return None
+    
+    def delete_old_image(self, image_path):
+        """Elimina una imagen antigua de la carpeta de recursos"""
+        try:
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            absolute_image_path = os.path.join(base_dir, image_path)
+            if os.path.exists(absolute_image_path):
+                os.remove(absolute_image_path)
+        except Exception as e:
+            # No es crítico si falla la eliminación
+            print(f"Warning: No se pudo eliminar la imagen antigua: {str(e)}")
+    
     def load_product_data(self):
         """Carga los datos del producto a editar"""
         self.sku_input.setText(self.product.sku)
@@ -886,6 +1114,19 @@ class ProductDialog(QDialog):
             index = self.category_combo.findData(self.product.category_id)
             if index >= 0:
                 self.category_combo.setCurrentIndex(index)
+        
+        # Cargar imagen si existe
+        if self.product.image_path:
+            # Construir ruta absoluta
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            absolute_image_path = os.path.join(base_dir, self.product.image_path)
+            if os.path.exists(absolute_image_path):
+                self.current_image_path = absolute_image_path
+                self.original_image_path = self.product.image_path
+                self.display_image(absolute_image_path)
+            else:
+                self.current_image_path = None
+                self.original_image_path = None
         
         # Cargar materias primas asociadas
         session = get_session()
@@ -941,6 +1182,22 @@ class ProductDialog(QDialog):
             if not self.is_editing:
                 session.add(product)
                 session.flush()  # Asegurar que product.id esté disponible
+            
+            # Manejar imagen del producto (si fue modificada o es un producto nuevo con imagen)
+            if self.image_changed or (not self.is_editing and self.current_image_path):
+                if self.current_image_path:
+                    # Guardar la imagen en resources/images/products
+                    saved_image_path = self.save_image_to_resources(self.current_image_path, product.id)
+                    if saved_image_path:
+                        product.image_path = saved_image_path
+                        # Eliminar imagen anterior si existe y es diferente
+                        if self.is_editing and self.original_image_path and self.original_image_path != saved_image_path:
+                            self.delete_old_image(self.original_image_path)
+                else:
+                    # Si se eliminó la imagen, limpiar el campo y eliminar archivo
+                    if self.is_editing and self.original_image_path:
+                        self.delete_old_image(self.original_image_path)
+                    product.image_path = None
             
             # Actualizar materias primas asociadas
             # Primero eliminar todas las relaciones existentes
