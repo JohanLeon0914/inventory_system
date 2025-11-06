@@ -4,7 +4,7 @@ Vista de Completar Venta - Para finalizar la venta con los productos seleccionad
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit, QComboBox,
-    QFormLayout, QGroupBox, QHeaderView, QMessageBox, QDoubleSpinBox
+    QFormLayout, QGroupBox, QHeaderView, QMessageBox, QDoubleSpinBox, QScrollArea
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -21,24 +21,87 @@ class CompleteSaleView(QWidget):
         self.load_customers()
     
     def init_ui(self):
-        # Estilos generales para asegurar que el texto sea visible
+        # Estilos generales para asegurar que el texto sea visible y fondo blanco
         self.setStyleSheet("""
             QWidget {
                 color: #0f172a;
+                background-color: white;
             }
             QLabel {
                 color: #0f172a;
+                background-color: transparent;
             }
             QDoubleSpinBox {
                 color: #0f172a;
+                background-color: white;
             }
             QLineEdit {
                 color: #0f172a;
+                background-color: white;
             }
         """)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        
+        # Layout principal del widget
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        self.setAutoFillBackground(True)
+        
+        # Crear un scroll area para todo el contenido
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setAutoFillBackground(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: white;
+            }
+            QScrollArea > QWidget > QWidget {
+                background-color: white;
+            }
+            QScrollBar:vertical {
+                background-color: #f1f5f9;
+                width: 14px;
+                border-radius: 7px;
+                margin: 2px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #cbd5e1;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #94a3b8;
+            }
+            QScrollBar:horizontal {
+                background-color: #f1f5f9;
+                height: 14px;
+                border-radius: 7px;
+                margin: 2px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #cbd5e1;
+                border-radius: 6px;
+                min-width: 30px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #94a3b8;
+            }
+        """)
+        
+        # Widget contenedor para el scroll
+        scroll_widget = QWidget()
+        scroll_widget.setAutoFillBackground(True)
+        scroll_widget.setStyleSheet("""
+            QWidget {
+                background-color: white;
+            }
+        """)
+        layout = QVBoxLayout(scroll_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
         
         # Header
         header_layout = QHBoxLayout()
@@ -51,8 +114,8 @@ class CompleteSaleView(QWidget):
         
         # Botón para volver a selección
         self.btn_back = QPushButton("← Volver a Productos")
-        self.btn_back.setFixedHeight(45)
-        self.btn_back.setFixedWidth(180)
+        self.btn_back.setFixedHeight(36)
+        self.btn_back.setFixedWidth(170)
         self.btn_back.setStyleSheet("""
             QPushButton {
                 background-color: #6b7280;
@@ -82,12 +145,14 @@ class CompleteSaleView(QWidget):
                 border-radius: 8px;
                 margin-top: 8px;
                 padding-top: 15px;
+                background-color: white;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 15px;
                 padding: 0 8px;
                 color: #0f172a;
+                background-color: white;
             }
         """)
         info_layout = QFormLayout()
@@ -95,7 +160,7 @@ class CompleteSaleView(QWidget):
         
         # Cliente
         self.customer_combo = QComboBox()
-        self.customer_combo.setMinimumHeight(40)
+        self.customer_combo.setMinimumHeight(32)
         self.customer_combo.setStyleSheet("""
             QComboBox {
                 background-color: white;
@@ -134,7 +199,7 @@ class CompleteSaleView(QWidget):
         
         # Método de pago
         self.payment_method_combo = QComboBox()
-        self.payment_method_combo.setMinimumHeight(40)
+        self.payment_method_combo.setMinimumHeight(32)
         for method in PaymentMethod:
             self.payment_method_combo.addItem(method.value, method)
         self.payment_method_combo.setStyleSheet("""
@@ -180,7 +245,7 @@ class CompleteSaleView(QWidget):
         self.transfer_type_label.setVisible(False)
         
         self.transfer_type_combo = QComboBox()
-        self.transfer_type_combo.setMinimumHeight(40)
+        self.transfer_type_combo.setMinimumHeight(32)
         self.transfer_type_combo.addItems(["Nequi", "Daviplata", "Bancolombia", "Otro"])
         self.transfer_type_combo.setVisible(False)
         self.transfer_type_combo.setStyleSheet("""
@@ -226,7 +291,7 @@ class CompleteSaleView(QWidget):
         self.other_transfer_label.setVisible(False)
         
         self.other_transfer_input = QLineEdit()
-        self.other_transfer_input.setMinimumHeight(40)
+        self.other_transfer_input.setMinimumHeight(32)
         self.other_transfer_input.setPlaceholderText("Ej: Paypal, Bitcoin, etc.")
         self.other_transfer_input.setVisible(False)
         self.other_transfer_input.setStyleSheet("""
@@ -258,12 +323,14 @@ class CompleteSaleView(QWidget):
                 border-radius: 8px;
                 margin-top: 8px;
                 padding-top: 15px;
+                background-color: white;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 15px;
                 padding: 0 8px;
                 color: #0f172a;
+                background-color: white;
             }
         """)
         items_layout = QVBoxLayout()
@@ -273,7 +340,8 @@ class CompleteSaleView(QWidget):
         self.items_table.setHorizontalHeaderLabels(["Producto", "Precio Unit.", "Cantidad", "Subtotal", "Acciones"])
         # Ajustar ancho de columna de acciones para dos botones
         self.items_table.horizontalHeader().setStretchLastSection(False)
-        self.items_table.setMinimumHeight(300)
+        self.items_table.setMinimumHeight(150)
+        self.items_table.setMaximumHeight(300)
         self.items_table.setStyleSheet("""
             QTableWidget {
                 gridline-color: #e2e8f0;
@@ -299,15 +367,45 @@ class CompleteSaleView(QWidget):
                 font-weight: bold;
                 color: #0f172a;
             }
+            QScrollBar:vertical {
+                background-color: #f1f5f9;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #cbd5e1;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #94a3b8;
+            }
+            QScrollBar:horizontal {
+                background-color: #f1f5f9;
+                height: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #cbd5e1;
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #94a3b8;
+            }
         """)
         
         # Configurar anchos de columnas
         header = self.items_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Producto
-        self.items_table.setColumnWidth(1, 120)  # Precio
-        self.items_table.setColumnWidth(2, 100)  # Cantidad
-        self.items_table.setColumnWidth(3, 120)  # Subtotal
-        self.items_table.setColumnWidth(4, 180)  # Acciones (más ancho para dos botones)
+        self.items_table.setColumnWidth(1, 100)  # Precio
+        self.items_table.setColumnWidth(2, 80)  # Cantidad
+        self.items_table.setColumnWidth(3, 100)  # Subtotal
+        self.items_table.setColumnWidth(4, 160)  # Acciones (más ancho para dos botones)
+        
+        # Configurar scroll
+        self.items_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.items_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         
         self.items_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.items_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -319,7 +417,6 @@ class CompleteSaleView(QWidget):
         
         # Totales y pago
         totals_section = QGroupBox("Totales y Pago")
-        totals_section.setMaximumHeight(250)
         totals_section.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -328,12 +425,14 @@ class CompleteSaleView(QWidget):
                 border-radius: 8px;
                 margin-top: 8px;
                 padding-top: 15px;
+                background-color: white;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 15px;
                 padding: 0 8px;
                 color: #0f172a;
+                background-color: white;
             }
         """)
         totals_layout = QFormLayout()
@@ -357,8 +456,8 @@ class CompleteSaleView(QWidget):
         self.tax_input.setMaximum(999999.99)
         self.tax_input.setDecimals(2)
         self.tax_input.setPrefix("$ ")
-        self.tax_input.setMinimumHeight(35)
-        self.tax_input.setMinimumWidth(150)
+        self.tax_input.setMinimumHeight(30)
+        self.tax_input.setMinimumWidth(120)
         self.tax_input.setValue(0.0)
         self.tax_input.setStyleSheet("""
             QDoubleSpinBox {
@@ -389,8 +488,8 @@ class CompleteSaleView(QWidget):
         
         self.cash_given_edit = QLineEdit()
         self.cash_given_edit.setPlaceholderText("Ingrese el monto recibido")
-        self.cash_given_edit.setMinimumHeight(40)
-        self.cash_given_edit.setMinimumWidth(150)
+        self.cash_given_edit.setMinimumHeight(32)
+        self.cash_given_edit.setMinimumWidth(120)
         self.cash_given_edit.setStyleSheet("""
             QLineEdit {
                 font-size: 16px; 
@@ -423,8 +522,8 @@ class CompleteSaleView(QWidget):
         buttons_layout.setContentsMargins(0, 15, 0, 0)
         
         btn_cancel = QPushButton("Cancelar Venta")
-        btn_cancel.setMinimumHeight(45)
-        btn_cancel.setMinimumWidth(140)
+        btn_cancel.setMinimumHeight(38)
+        btn_cancel.setMinimumWidth(130)
         btn_cancel.setStyleSheet("""
             QPushButton {
                 background-color: #ef4444;
@@ -440,8 +539,8 @@ class CompleteSaleView(QWidget):
         btn_cancel.clicked.connect(self.cancel_sale)
         
         btn_complete = QPushButton("Completar Venta")
-        btn_complete.setMinimumHeight(45)
-        btn_complete.setMinimumWidth(160)
+        btn_complete.setMinimumHeight(38)
+        btn_complete.setMinimumWidth(150)
         btn_complete.setStyleSheet("""
             QPushButton {
                 background-color: #10b981;
@@ -461,6 +560,12 @@ class CompleteSaleView(QWidget):
         buttons_layout.addWidget(btn_complete)
         
         layout.addLayout(buttons_layout)
+        
+        # Agregar el widget al scroll area
+        scroll_area.setWidget(scroll_widget)
+        
+        # Agregar el scroll area al layout principal
+        main_layout.addWidget(scroll_area)
     
     def load_customers(self):
         """Carga los clientes disponibles"""
@@ -537,8 +642,8 @@ class CompleteSaleView(QWidget):
             
             # Botón sumar cantidad
             btn_increase = QPushButton("➕ +1")
-            btn_increase.setFixedHeight(35)
-            btn_increase.setFixedWidth(80)
+            btn_increase.setFixedHeight(30)
+            btn_increase.setFixedWidth(70)
             btn_increase.setStyleSheet("""
                 QPushButton {
                     background-color: #10b981;
@@ -556,8 +661,8 @@ class CompleteSaleView(QWidget):
             
             # Botón reducir cantidad
             btn_reduce = QPushButton("➖ -1")
-            btn_reduce.setFixedHeight(35)
-            btn_reduce.setFixedWidth(80)
+            btn_reduce.setFixedHeight(30)
+            btn_reduce.setFixedWidth(70)
             btn_reduce.setStyleSheet("""
                 QPushButton {
                     background-color: #f59e0b;
@@ -575,7 +680,7 @@ class CompleteSaleView(QWidget):
             
             self.items_table.setCellWidget(row, 4, actions_widget)
             
-            self.items_table.setRowHeight(row, 50)
+            self.items_table.setRowHeight(row, 42)
         
         # Conectar señal para detectar cambios en cantidad
         self.items_table.itemChanged.connect(self.on_quantity_changed)
