@@ -1251,7 +1251,7 @@ class EditSaleFullDialog(QDialog):
         # Hacer la ventana de pantalla completa
         self.setWindowState(Qt.WindowState.WindowMaximized)
         # También establecer tamaño mínimo para casos donde no se maximice
-        self.setMinimumSize(1400, 900)
+        self.setMinimumSize(900, 600)
         self.setStyleSheet("""
             QDialog {
                 background-color: white;
@@ -1285,7 +1285,56 @@ class EditSaleFullDialog(QDialog):
             }
         """)
         
-        layout = QVBoxLayout(self)
+        # Layout principal del diálogo
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Crear un scroll area para todo el contenido
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: white;
+            }
+            QScrollBar:vertical {
+                background-color: #f1f5f9;
+                width: 14px;
+                border-radius: 7px;
+                margin: 2px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #cbd5e1;
+                border-radius: 6px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #94a3b8;
+            }
+            QScrollBar:horizontal {
+                background-color: #f1f5f9;
+                height: 14px;
+                border-radius: 7px;
+                margin: 2px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #cbd5e1;
+                border-radius: 6px;
+                min-width: 30px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #94a3b8;
+            }
+        """)
+        
+        # Widget contenedor para el scroll
+        scroll_widget = QWidget()
+        layout = QVBoxLayout(scroll_widget)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
         
         # Mensaje de advertencia removido
         
@@ -1464,11 +1513,11 @@ class EditSaleFullDialog(QDialog):
         products_section = QGroupBox("Productos")
         products_layout = QVBoxLayout()
         
-        # Galería de productos (igual que en NewSaleDialog)
+        # Galería de productos (reducida para pantallas pequeñas)
         self.products_scroll = QScrollArea()
         self.products_scroll.setWidgetResizable(True)
-        self.products_scroll.setMinimumHeight(160)
-        self.products_scroll.setMaximumHeight(200)
+        self.products_scroll.setMinimumHeight(120)
+        self.products_scroll.setMaximumHeight(150)
         self.products_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # Scroll vertical cuando sea necesario
         self.products_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)  # Scroll horizontal cuando sea necesario
         self.products_scroll.setStyleSheet("""
@@ -1506,9 +1555,9 @@ class EditSaleFullDialog(QDialog):
         """)
         products_container = QWidget()
         self.products_grid = QGridLayout(products_container)
-        self.products_grid.setContentsMargins(10, 10, 10, 10)
-        self.products_grid.setHorizontalSpacing(8)
-        self.products_grid.setVerticalSpacing(8)
+        self.products_grid.setContentsMargins(5, 5, 5, 5)
+        self.products_grid.setHorizontalSpacing(5)
+        self.products_grid.setVerticalSpacing(5)
         self.products_scroll.setWidget(products_container)
         products_layout.addWidget(self.products_scroll)
         
@@ -1523,8 +1572,8 @@ class EditSaleFullDialog(QDialog):
         self.items_table.setColumnCount(5)
         self.items_table.setHorizontalHeaderLabels(["Producto", "Precio Unit.", "Cantidad", "Subtotal", "Acciones"])
         self.items_table.horizontalHeader().setStretchLastSection(False)
-        self.items_table.setMinimumHeight(200)  # Altura mínima reducida para pantallas pequeñas
-        # No establecer altura máxima para permitir que se adapte dinámicamente
+        self.items_table.setMinimumHeight(150)  # Altura mínima reducida para pantallas pequeñas
+        self.items_table.setMaximumHeight(300)  # Altura máxima para controlar el espacio en pantallas pequeñas
         self.items_table.setStyleSheet("""
             QTableWidget {
                 gridline-color: #e2e8f0;
@@ -1581,10 +1630,10 @@ class EditSaleFullDialog(QDialog):
         # Configurar anchos de columnas
         header = self.items_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.items_table.setColumnWidth(1, 120)
-        self.items_table.setColumnWidth(2, 100)
-        self.items_table.setColumnWidth(3, 120)
-        self.items_table.setColumnWidth(4, 180)  # Acciones (más ancho para dos botones)
+        self.items_table.setColumnWidth(1, 100)
+        self.items_table.setColumnWidth(2, 80)
+        self.items_table.setColumnWidth(3, 100)
+        self.items_table.setColumnWidth(4, 160)  # Acciones (más ancho para dos botones)
         
         # Configurar scroll y comportamiento - AsNeeded para que aparezca dinámicamente
         self.items_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -1593,10 +1642,10 @@ class EditSaleFullDialog(QDialog):
         self.items_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.items_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         
-        products_layout.addWidget(self.items_table, 1)
+        products_layout.addWidget(self.items_table)
         
         products_section.setLayout(products_layout)
-        layout.addWidget(products_section, 1)
+        layout.addWidget(products_section)
         
         # Actualizar tabla con items cargados
         self.update_items_table()
@@ -1605,7 +1654,6 @@ class EditSaleFullDialog(QDialog):
         totals_layout = QHBoxLayout()
         
         totals_group = QGroupBox("Totales y Pago")
-        totals_group.setMaximumHeight(250)
         totals_group.setStyleSheet("""
             QGroupBox {
                 font-weight: bold;
@@ -1643,8 +1691,8 @@ class EditSaleFullDialog(QDialog):
         self.tax_input.setMaximum(999999.99)
         self.tax_input.setDecimals(2)
         self.tax_input.setPrefix("$ ")
-        self.tax_input.setMinimumHeight(32)
-        self.tax_input.setMinimumWidth(120)
+        self.tax_input.setMinimumHeight(28)
+        self.tax_input.setMinimumWidth(100)
         self.tax_input.setValue(0.0)
         self.tax_input.setStyleSheet("""
             QDoubleSpinBox {
@@ -1674,9 +1722,9 @@ class EditSaleFullDialog(QDialog):
         pago_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #0f172a;")
         
         self.cash_given_edit = QLineEdit()
-        self.cash_given_edit.setPlaceholderText("")
-        self.cash_given_edit.setMinimumHeight(32)
-        self.cash_given_edit.setMinimumWidth(120)
+        self.cash_given_edit.setPlaceholderText("Ingrese el monto recibido")
+        self.cash_given_edit.setMinimumHeight(28)
+        self.cash_given_edit.setMinimumWidth(100)
         self.cash_given_edit.setStyleSheet("""
             QLineEdit {
                 font-size: 14px; 
@@ -1747,8 +1795,8 @@ class EditSaleFullDialog(QDialog):
         
         # Botón para cancelar la venta (devolver inventario)
         btn_cancel_sale = QPushButton("❌ Cancelar Venta")
-        btn_cancel_sale.setMinimumHeight(38)
-        btn_cancel_sale.setMinimumWidth(140)
+        btn_cancel_sale.setMinimumHeight(36)
+        btn_cancel_sale.setMinimumWidth(130)
         btn_cancel_sale.setStyleSheet("""
             QPushButton {
                 background-color: #ef4444;
@@ -1767,8 +1815,8 @@ class EditSaleFullDialog(QDialog):
         buttons_layout.addStretch()
         
         btn_cancel = QPushButton("Cerrar")
-        btn_cancel.setMinimumHeight(38)
-        btn_cancel.setMinimumWidth(110)
+        btn_cancel.setMinimumHeight(36)
+        btn_cancel.setMinimumWidth(100)
         btn_cancel.setStyleSheet("""
             QPushButton {
                 background-color: #6b7280;
@@ -1784,8 +1832,8 @@ class EditSaleFullDialog(QDialog):
         btn_cancel.clicked.connect(self.reject)
         
         btn_save = QPushButton("Guardar Cambios")
-        btn_save.setMinimumHeight(38)
-        btn_save.setMinimumWidth(140)
+        btn_save.setMinimumHeight(36)
+        btn_save.setMinimumWidth(130)
         btn_save.setStyleSheet("""
             QPushButton {
                 background-color: #f59e0b;
@@ -1804,6 +1852,12 @@ class EditSaleFullDialog(QDialog):
         buttons_layout.addWidget(btn_save)
         
         layout.addLayout(buttons_layout)
+        
+        # Agregar el widget al scroll area
+        scroll_area.setWidget(scroll_widget)
+        
+        # Agregar el scroll area al layout principal
+        main_layout.addWidget(scroll_area)
     
     def set_focus_to_payment(self):
         """Establece el foco en el campo de pago"""
@@ -1895,12 +1949,12 @@ class EditSaleFullDialog(QDialog):
         if not hasattr(self, '_products_cache') or self._products_cache is None:
             self.load_products()
         
-        max_cols = 8
+        max_cols = 10
         row = 0
         col = 0
         for product in (self._products_cache or [])[:30]:
             btn = QPushButton()
-            btn.setFixedSize(120, 100)
+            btn.setFixedSize(90, 80)
             btn.setStyleSheet("""
                 QPushButton { 
                     background-color: white; 
@@ -1941,9 +1995,9 @@ class EditSaleFullDialog(QDialog):
             
             # Configurar imagen en el botón si existe
             if pix and not pix.isNull():
-                # Escalar imagen para que quepa bien en la tarjeta (80x80 para tarjeta de 120x100)
+                # Escalar imagen para que quepa bien en la tarjeta (60x60 para tarjeta de 90x80)
                 scaled_pix = pix.scaled(
-                    80, 80,
+                    60, 60,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation
                 )
@@ -2081,8 +2135,8 @@ class EditSaleFullDialog(QDialog):
             
             # Botón sumar cantidad
             btn_increase = QPushButton("➕ +1")
-            btn_increase.setFixedHeight(32)
-            btn_increase.setFixedWidth(80)
+            btn_increase.setFixedHeight(28)
+            btn_increase.setFixedWidth(70)
             btn_increase.setStyleSheet("""
                 QPushButton {
                     background-color: #10b981;
@@ -2100,8 +2154,8 @@ class EditSaleFullDialog(QDialog):
             
             # Botón reducir cantidad
             btn_reduce = QPushButton("➖ -1")
-            btn_reduce.setFixedHeight(32)
-            btn_reduce.setFixedWidth(80)
+            btn_reduce.setFixedHeight(28)
+            btn_reduce.setFixedWidth(70)
             btn_reduce.setStyleSheet("""
                 QPushButton {
                     background-color: #f59e0b;
@@ -2119,7 +2173,7 @@ class EditSaleFullDialog(QDialog):
             
             self.items_table.setCellWidget(row, 4, actions_widget)
             
-            self.items_table.setRowHeight(row, 45)
+            self.items_table.setRowHeight(row, 40)
         
         # Conectar señal para detectar cambios en cantidad
         self.items_table.itemChanged.connect(self.on_quantity_changed)
