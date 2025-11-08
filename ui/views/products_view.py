@@ -872,51 +872,25 @@ class ProductDialog(QDialog):
         image_group.setLayout(image_layout)
         layout.addWidget(image_group)
         
-        # Sección de Materias Primas
-        materials_group = QGroupBox("Materias Primas Requeridas")
-        materials_layout = QVBoxLayout()
-        
-        # Selector para agregar materia prima
-        add_material_layout = QHBoxLayout()
-        
-        self.material_combo = QComboBox()
-        self.material_combo.setMinimumHeight(35)
-        self.load_raw_materials()
-        add_material_layout.addWidget(QLabel("Materia Prima:"))
-        add_material_layout.addWidget(self.material_combo, 1)
-        
-        self.quantity_spin = QDoubleSpinBox()
-        self.quantity_spin.setMinimum(0.01)
-        self.quantity_spin.setMaximum(9999.99)
-        self.quantity_spin.setValue(1.0)
-        self.quantity_spin.setDecimals(2)
-        self.quantity_spin.setMinimumHeight(35)
-        add_material_layout.addWidget(QLabel("Cantidad:"))
-        add_material_layout.addWidget(self.quantity_spin)
-        
-        btn_add_material = QPushButton("Agregar")
-        btn_add_material.setMinimumHeight(35)
-        btn_add_material.clicked.connect(self.add_material_to_list)
-        add_material_layout.addWidget(btn_add_material)
-        
-        materials_layout.addLayout(add_material_layout)
-        
-        # Tabla de materias primas asociadas
-        self.materials_table = QTableWidget()
-        self.materials_table.setColumnCount(4)
-        self.materials_table.setHorizontalHeaderLabels(["Materia Prima", "Cantidad", "Unidad", "Acciones"])
-        self.materials_table.setMinimumHeight(150)
-        self.materials_table.setMaximumHeight(250)
-        
-        materials_header = self.materials_table.horizontalHeader()
-        materials_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.materials_table.setColumnWidth(1, 100)
-        self.materials_table.setColumnWidth(2, 80)
-        self.materials_table.setColumnWidth(3, 80)
-        
-        materials_layout.addWidget(self.materials_table)
-        materials_group.setLayout(materials_layout)
-        layout.addWidget(materials_group)
+        # Botón para ver/editar materias primas
+        btn_materials = QPushButton("🔧 Configurar Materia Prima")
+        btn_materials.setMinimumHeight(40)
+        btn_materials.setStyleSheet("""
+            QPushButton {
+                background-color: #8b5cf6;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #7c3aed;
+            }
+        """)
+        btn_materials.clicked.connect(self.open_materials_dialog)
+        layout.addWidget(btn_materials)
         
         # Botones
         buttons_layout = QHBoxLayout()
@@ -944,72 +918,23 @@ class ProductDialog(QDialog):
         finally:
             close_session()
     
-    def load_raw_materials(self):
-        """Carga las materias primas disponibles"""
-        session = get_session()
-        try:
-            self.material_combo.clear()
-            materials = session.query(RawMaterial).all()
-            for material in materials:
-                display_text = f"{material.name} ({material.unit})"
-                self.material_combo.addItem(display_text, material.id)
-        finally:
-            close_session()
-    
-    def add_material_to_list(self):
-        """Agrega una materia prima a la lista del producto"""
-        material_id = self.material_combo.currentData()
-        if not material_id:
-            QMessageBox.warning(self, "Error", "Seleccione una materia prima")
-            return
-        
-        quantity = self.quantity_spin.value()
-        
-        # Verificar si ya existe en la lista
-        for mat_data in self.materials_data:
-            if mat_data['id'] == material_id:
-                QMessageBox.warning(self, "Error", "Esta materia prima ya está en la lista")
-                return
-        
-        # Obtener datos de la materia prima
-        session = get_session()
-        try:
-            material = session.query(RawMaterial).filter_by(id=material_id).first()
-            if material:
-                self.materials_data.append({
-                    'id': material.id,
-                    'name': material.name,
-                    'quantity': quantity,
-                    'unit': material.unit
-                })
-                self.update_materials_table()
-        finally:
-            close_session()
-    
-    def remove_material_from_list(self, material_id):
-        """Elimina una materia prima de la lista"""
-        self.materials_data = [m for m in self.materials_data if m['id'] != material_id]
-        self.update_materials_table()
-    
-    def update_materials_table(self):
-        """Actualiza la tabla de materias primas"""
-        self.materials_table.setRowCount(len(self.materials_data))
-        
-        for row, mat_data in enumerate(self.materials_data):
-            # Nombre
-            self.materials_table.setItem(row, 0, QTableWidgetItem(mat_data['name']))
-            
-            # Cantidad
-            self.materials_table.setItem(row, 1, QTableWidgetItem(f"{mat_data['quantity']:.2f}"))
-            
-            # Unidad
-            self.materials_table.setItem(row, 2, QTableWidgetItem(mat_data['unit']))
-            
-            # Botón eliminar
-            btn_remove = QPushButton("Quitar")
-            btn_remove.setStyleSheet("background-color: #ef4444; color: white;")
-            btn_remove.clicked.connect(lambda checked, mid=mat_data['id']: self.remove_material_from_list(mid))
-            self.materials_table.setCellWidget(row, 3, btn_remove)
+    def open_materials_dialog(self):
+        """Abre el diálogo para gestionar las materias primas del producto"""
+        if self.is_editing and self.product:
+            # Obtener el producto actualizado de la base de datos
+            session = get_session()
+            try:
+                product = session.query(Product).filter_by(id=self.product.id).first()
+                if product:
+                    # Mantener la referencia actualizada
+                    self.product = product
+                    dialog = ProductMaterialsDialog(self, self.materials_data, product)
+                    dialog.exec()
+            finally:
+                close_session()
+        else:
+            dialog = ProductMaterialsDialog(self, self.materials_data, None)
+            dialog.exec()
     
     def select_image(self):
         """Abre el diálogo para seleccionar una imagen"""
@@ -1129,6 +1054,7 @@ class ProductDialog(QDialog):
                 self.original_image_path = None
         
         # Cargar materias primas asociadas
+        self.materials_data.clear()
         session = get_session()
         try:
             product_materials = session.query(ProductMaterial).filter_by(product_id=self.product.id).all()
@@ -1141,7 +1067,6 @@ class ProductDialog(QDialog):
                         'quantity': pm.quantity_needed,
                         'unit': material.unit
                     })
-            self.update_materials_table()
         finally:
             close_session()
     
@@ -1198,13 +1123,9 @@ class ProductDialog(QDialog):
                     if self.is_editing and self.original_image_path:
                         self.delete_old_image(self.original_image_path)
                     product.image_path = None
-            
+
             # Actualizar materias primas asociadas
-            # Primero eliminar todas las relaciones existentes
-            if self.is_editing:
-                session.query(ProductMaterial).filter_by(product_id=product.id).delete()
-            
-            # Agregar las nuevas relaciones
+            session.query(ProductMaterial).filter_by(product_id=product.id).delete()
             for mat_data in self.materials_data:
                 product_material = ProductMaterial(
                     product_id=product.id,
@@ -1214,6 +1135,7 @@ class ProductDialog(QDialog):
                 session.add(product_material)
             
             session.commit()
+            self.product = product
             
             QMessageBox.information(
                 self, 
@@ -1222,6 +1144,310 @@ class ProductDialog(QDialog):
             )
             self.accept()
             
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, "Error", f"Error al guardar: {str(e)}")
+        finally:
+            close_session()
+
+
+class ProductMaterialsDialog(QDialog):
+    """Diálogo para gestionar las materias primas de un producto"""
+
+    def __init__(self, parent=None, materials_data=None, product=None):
+        super().__init__(parent)
+        self.product = product
+        # Usar la lista compartida con el diálogo principal
+        self.materials_data = materials_data if materials_data is not None else []
+        self.init_ui()
+        self.load_raw_materials()
+        self.populate_materials_table()
+
+    def init_ui(self):
+        product_name = self.product.name if self.product else "Nuevo producto"
+        product_sku = f" ({self.product.sku})" if self.product and self.product.sku else ""
+        self.setWindowTitle(f"Materias Primas - {product_name}")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(500)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: white;
+            }
+            QLabel {
+                color: #0f172a;
+                font-size: 13px;
+            }
+            QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+                color: #0f172a;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: #0f172a;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                selection-background-color: #3b82f6;
+                selection-color: white;
+                outline: none;
+            }
+            QGroupBox {
+                font-weight: bold;
+                font-size: 14px;
+                color: #0f172a;
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        # Información del producto
+        info_label = QLabel(f"<b>Producto:</b> {product_name}{product_sku}")
+        info_label.setStyleSheet("font-size: 14px; padding: 10px; background-color: #f8fafc; border-radius: 6px;")
+        layout.addWidget(info_label)
+
+        # Sección de Materias Primas
+        materials_group = QGroupBox("Materias Primas Requeridas")
+        materials_layout = QVBoxLayout()
+
+        # Selector para agregar materia prima
+        add_material_layout = QHBoxLayout()
+
+        self.material_combo = QComboBox()
+        self.material_combo.setMinimumHeight(35)
+        add_material_layout.addWidget(QLabel("Materia Prima:"))
+        add_material_layout.addWidget(self.material_combo, 1)
+
+        self.quantity_spin = QDoubleSpinBox()
+        self.quantity_spin.setMinimum(0.01)
+        self.quantity_spin.setMaximum(9999.99)
+        self.quantity_spin.setValue(1.0)
+        self.quantity_spin.setDecimals(2)
+        self.quantity_spin.setMinimumHeight(35)
+        add_material_layout.addWidget(QLabel("Cantidad:"))
+        add_material_layout.addWidget(self.quantity_spin)
+
+        btn_add_material = QPushButton("Agregar")
+        btn_add_material.setMinimumHeight(35)
+        btn_add_material.setStyleSheet("""
+            QPushButton {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 500;
+                padding: 8px 15px;
+            }
+            QPushButton:hover {
+                background-color: #2563eb;
+            }
+        """)
+        btn_add_material.clicked.connect(self.add_material_to_list)
+        add_material_layout.addWidget(btn_add_material)
+
+        materials_layout.addLayout(add_material_layout)
+
+        # Tabla de materias primas asociadas
+        self.materials_table = QTableWidget()
+        self.materials_table.setColumnCount(4)
+        self.materials_table.setHorizontalHeaderLabels(["Materia Prima", "Cantidad", "Unidad", "Acciones"])
+        self.materials_table.setMinimumHeight(250)
+
+        materials_header = self.materials_table.horizontalHeader()
+        materials_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.materials_table.setColumnWidth(1, 120)
+        self.materials_table.setColumnWidth(2, 100)
+        self.materials_table.setColumnWidth(3, 100)
+
+        # Estilos para la tabla
+        self.materials_table.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                gridline-color: #f1f5f9;
+            }
+            QTableWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            QHeaderView::section {
+                background-color: #f8fafc;
+                padding: 10px;
+                border: none;
+                border-bottom: 2px solid #e2e8f0;
+                font-weight: bold;
+            }
+        """)
+
+        materials_layout.addWidget(self.materials_table)
+        materials_group.setLayout(materials_layout)
+        layout.addWidget(materials_group)
+
+        # Botones
+        buttons_layout = QHBoxLayout()
+
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.setMinimumHeight(40)
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #6b7280;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 8px 20px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+            }
+        """)
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_save = QPushButton("Guardar")
+        btn_save.setMinimumHeight(40)
+        btn_save.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                padding: 8px 20px;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+        """)
+        btn_save.clicked.connect(self.save_materials)
+
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(btn_cancel)
+        buttons_layout.addWidget(btn_save)
+
+        layout.addLayout(buttons_layout)
+
+    def load_raw_materials(self):
+        """Carga las materias primas disponibles"""
+        session = get_session()
+        try:
+            self.material_combo.clear()
+            materials = session.query(RawMaterial).all()
+            for material in materials:
+                display_text = f"{material.name} ({material.unit})"
+                self.material_combo.addItem(display_text, material.id)
+        finally:
+            close_session()
+
+    def populate_materials_table(self):
+        """Muestra los datos actuales en la tabla"""
+        self.materials_table.setRowCount(len(self.materials_data))
+        for row, mat_data in enumerate(self.materials_data):
+            self.materials_table.setItem(row, 0, QTableWidgetItem(mat_data['name']))
+
+            quantity_item = QTableWidgetItem(f"{mat_data['quantity']:.2f}")
+            quantity_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.materials_table.setItem(row, 1, quantity_item)
+
+            unit_item = QTableWidgetItem(mat_data['unit'])
+            unit_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.materials_table.setItem(row, 2, unit_item)
+
+            btn_remove = QPushButton("Eliminar")
+            btn_remove.setMinimumHeight(30)
+            btn_remove.setStyleSheet("""
+                QPushButton {
+                    background-color: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    padding: 4px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #dc2626;
+                }
+            """)
+            btn_remove.clicked.connect(lambda checked, mid=mat_data['id']: self.remove_material_from_list(mid))
+            self.materials_table.setCellWidget(row, 3, btn_remove)
+            self.materials_table.setRowHeight(row, 40)
+
+    def add_material_to_list(self):
+        """Agrega una materia prima a la lista del producto"""
+        material_id = self.material_combo.currentData()
+        if not material_id:
+            QMessageBox.warning(self, "Error", "Seleccione una materia prima")
+            return
+
+        quantity = self.quantity_spin.value()
+
+        for mat_data in self.materials_data:
+            if mat_data['id'] == material_id:
+                QMessageBox.warning(self, "Error", "Esta materia prima ya está en la lista")
+                return
+
+        session = get_session()
+        try:
+            material = session.query(RawMaterial).filter_by(id=material_id).first()
+            if material:
+                self.materials_data.append({
+                    'id': material.id,
+                    'name': material.name,
+                    'quantity': quantity,
+                    'unit': material.unit
+                })
+                self.populate_materials_table()
+                self.quantity_spin.setValue(1.0)
+        finally:
+            close_session()
+
+    def remove_material_from_list(self, material_id):
+        """Elimina una materia prima de la lista"""
+        self.materials_data[:] = [m for m in self.materials_data if m['id'] != material_id]
+        self.populate_materials_table()
+
+    def save_materials(self):
+        """Persistir los cambios si el producto ya existe"""
+        if not self.product:
+            QMessageBox.information(
+                self,
+                "Información",
+                "Las materias primas se guardarán cuando guardes el producto."
+            )
+            self.accept()
+            return
+
+        session = get_session()
+        try:
+            session.query(ProductMaterial).filter_by(product_id=self.product.id).delete()
+            for mat_data in self.materials_data:
+                product_material = ProductMaterial(
+                    product_id=self.product.id,
+                    raw_material_id=mat_data['id'],
+                    quantity_needed=mat_data['quantity']
+                )
+                session.add(product_material)
+
+            session.commit()
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                "Materias primas guardadas correctamente"
+            )
+            self.accept()
+
         except Exception as e:
             session.rollback()
             QMessageBox.critical(self, "Error", f"Error al guardar: {str(e)}")

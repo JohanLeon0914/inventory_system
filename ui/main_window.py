@@ -186,12 +186,16 @@ class MainWindow(QMainWindow):
     
     def show_raw_materials(self):
         """Muestra la vista de materias primas"""
+        if not self._ensure_inventory_auth():
+            return
         self.uncheck_all_buttons()
         self.btn_raw_materials.setChecked(True)
         self.stacked_widget.setCurrentWidget(self.raw_materials_view)
     
     def show_inventory(self):
         """Muestra la vista de inventario"""
+        if not self._ensure_inventory_auth():
+            return
         # Crear vista de inventario si no existe
         if self.inventory_view is None:
             from ui.views.inventory_view import InventoryView
@@ -199,34 +203,32 @@ class MainWindow(QMainWindow):
             # Insertar en la posición correcta (después de raw_materials, index 2)
             self.stacked_widget.insertWidget(3, self.inventory_view)
         
-        # Verificar si hay contraseña configurada
+        self.uncheck_all_buttons()
+        self.btn_inventory.setChecked(True)
+        self.stacked_widget.setCurrentWidget(self.inventory_view)
+
+    def _ensure_inventory_auth(self):
+        """Solicita autenticación si la sección de inventario está protegida."""
         from config.database import get_session, close_session
         from models.inventory_password import InventoryPassword
-        
+
         session = get_session()
         try:
             password_record = session.query(InventoryPassword).first()
             has_password = password_record and password_record.password_hash
         finally:
             close_session()
-        
-        # Solicitar autenticación dependiendo si hay contraseña
+
+        from ui.dialogs.inventory_auth_dialog import InventoryAuthDialog
+
         if has_password:
-            # Hay contraseña: solicitar autenticación
-            from ui.dialogs.inventory_auth_dialog import InventoryAuthDialog
             auth_dialog = InventoryAuthDialog(self, is_password_set=True)
-            if auth_dialog.exec() == QDialog.DialogCode.Rejected:
-                # Usuario canceló, no cambiar de vista
-                return
+            return auth_dialog.exec() == QDialog.DialogCode.Accepted
         else:
-            # No hay contraseña: mostrar opción opcional para establecer una
-            from ui.dialogs.inventory_auth_dialog import InventoryAuthDialog
+            # Permitir acceso pero ofrecer configurar contraseña
             auth_dialog = InventoryAuthDialog(self, is_password_set=False)
-            auth_dialog.exec()  # Ignorar resultado, siempre permitir acceso
-        
-        self.uncheck_all_buttons()
-        self.btn_inventory.setChecked(True)
-        self.stacked_widget.setCurrentWidget(self.inventory_view)
+            auth_dialog.exec()
+            return True
     
     def show_sales(self):
         """Muestra la vista de ventas"""
