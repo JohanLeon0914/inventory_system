@@ -19,10 +19,24 @@ class InvoiceDialog(QDialog):
         super().__init__(parent)
         self.sale = sale
         self.setWindowTitle("📄 Factura de Venta")
-        self.setMinimumSize(600, 800)
+        self.setMinimumSize(560, 520)
+        self.resize(600, 650)
         self.setModal(True)
         self.init_ui()
         self.load_sale_data()
+    
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.adjust_dialog_height()
+    
+    def adjust_dialog_height(self):
+        """Reduce la altura para que siempre sea menor que la ventana principal."""
+        parent_height = self.parent().height() if self.parent() else None
+        if parent_height and parent_height > 200:
+            target_height = max(480, min(parent_height - 60, int(parent_height * 0.85)))
+        else:
+            target_height = 650
+        self.resize(self.width(), target_height)
     
     def init_ui(self):
         self.setStyleSheet("""
@@ -53,6 +67,8 @@ class InvoiceDialog(QDialog):
         # Área de factura
         self.invoice_area = QTextEdit()
         self.invoice_area.setReadOnly(True)
+        self.invoice_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.invoice_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.invoice_area.setStyleSheet("""
             QTextEdit {
                 background-color: white;
@@ -62,7 +78,7 @@ class InvoiceDialog(QDialog):
                 font-family: 'Courier New', monospace;
             }
         """)
-        layout.addWidget(self.invoice_area)
+        layout.addWidget(self.invoice_area, stretch=1)
         
         # Botones
         buttons_layout = QHBoxLayout()

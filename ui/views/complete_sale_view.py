@@ -4,7 +4,8 @@ Vista de Completar Venta - Para finalizar la venta con los productos seleccionad
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QLineEdit, QComboBox,
-    QFormLayout, QGroupBox, QHeaderView, QMessageBox, QDoubleSpinBox, QScrollArea
+    QFormLayout, QGroupBox, QHeaderView, QMessageBox, QDoubleSpinBox, QScrollArea,
+    QDialog
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -335,6 +336,34 @@ class CompleteSaleView(QWidget):
         """)
         items_layout = QVBoxLayout()
         
+        header_items_layout = QHBoxLayout()
+        header_items_layout.setContentsMargins(0, 0, 0, 4)
+        
+        items_title = QLabel("Lista de productos agregados")
+        items_title.setStyleSheet("font-weight: bold; font-size: 14px; color: #0f172a;")
+        header_items_layout.addWidget(items_title)
+        header_items_layout.addStretch()
+        
+        self.items_full_view_btn = QPushButton("Ver en ventana dedicada")
+        self.items_full_view_btn.setMinimumHeight(30)
+        self.items_full_view_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                font-weight: bold;
+                font-size: 12px;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        self.items_full_view_btn.clicked.connect(self.open_items_full_view)
+        header_items_layout.addWidget(self.items_full_view_btn)
+        
+        items_layout.addLayout(header_items_layout)
+        
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(5)
         self.items_table.setHorizontalHeaderLabels(["Producto", "Precio Unit.", "Cantidad", "Subtotal", "Acciones"])
@@ -401,7 +430,7 @@ class CompleteSaleView(QWidget):
         self.items_table.setColumnWidth(1, 100)  # Precio
         self.items_table.setColumnWidth(2, 80)  # Cantidad
         self.items_table.setColumnWidth(3, 100)  # Subtotal
-        self.items_table.setColumnWidth(4, 160)  # Acciones (más ancho para dos botones)
+        self.items_table.setColumnWidth(4, 80)   # Acciones compactas
         
         # Configurar scroll
         self.items_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -637,50 +666,47 @@ class CompleteSaleView(QWidget):
             # Botones de acciones: sumar y restar
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 4, 4, 4)
-            actions_layout.setSpacing(4)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            actions_layout.setSpacing(6)
+            actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
-            # Botón sumar cantidad
-            btn_increase = QPushButton("➕ +1")
-            btn_increase.setFixedHeight(30)
-            btn_increase.setFixedWidth(70)
-            btn_increase.setStyleSheet("""
+            button_style = """
                 QPushButton {
-                    background-color: #10b981;
-                    color: white;
+                    background-color: transparent;
+                    border: none;
+                    color: #0f172a;
+                    font-size: 16px;
                     font-weight: bold;
-                    font-size: 11px;
-                    border-radius: 4px;
+                    padding: 0;
+                    min-width: 0;
                 }
                 QPushButton:hover {
-                    background-color: #059669;
+                    color: #2563eb;
                 }
-            """)
+            """
+            
+            # Botón sumar cantidad
+            btn_increase = QPushButton("+")
+            btn_increase.setFixedSize(24, 24)
+            btn_increase.setStyleSheet(button_style)
+            btn_increase.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn_increase.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_increase.clicked.connect(lambda checked, r=row: self.increase_item_quantity(r))
             actions_layout.addWidget(btn_increase)
             
             # Botón reducir cantidad
-            btn_reduce = QPushButton("➖ -1")
-            btn_reduce.setFixedHeight(30)
-            btn_reduce.setFixedWidth(70)
-            btn_reduce.setStyleSheet("""
-                QPushButton {
-                    background-color: #f59e0b;
-                    color: white;
-                    font-weight: bold;
-                    font-size: 11px;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #d97706;
-                }
-            """)
+            btn_reduce = QPushButton("-")
+            btn_reduce.setFixedSize(24, 24)
+            btn_reduce.setStyleSheet(button_style)
+            btn_reduce.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn_reduce.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_reduce.clicked.connect(lambda checked, r=row: self.reduce_item_quantity(r))
             actions_layout.addWidget(btn_reduce)
             
             self.items_table.setCellWidget(row, 4, actions_widget)
             
-            self.items_table.setRowHeight(row, 42)
+            # Aumentar altura de fila para íconos visibles
+            self.items_table.setRowHeight(row, 50)
         
         # Conectar señal para detectar cambios en cantidad
         self.items_table.itemChanged.connect(self.on_quantity_changed)
@@ -875,6 +901,14 @@ class CompleteSaleView(QWidget):
         
         return transfer_type
     
+    def open_items_full_view(self):
+        """Abre una ventana dedicada con todo el detalle de los productos."""
+        if not self.sale_items:
+            QMessageBox.information(self, "Sin productos", "Agregue productos antes de abrir la vista completa.")
+            return
+        dialog = ItemsFullViewDialog(self.sale_items, parent_view=self, parent=self)
+        dialog.exec()
+    
     def go_back_to_selection(self):
         """Regresa a la vista de selección de productos"""
         if hasattr(self.parent(), 'show_product_selection_view'):
@@ -922,3 +956,225 @@ class CompleteSaleView(QWidget):
     def get_sale_items(self):
         """Retorna los items de la venta"""
         return self.sale_items.copy()
+
+
+class ItemsFullViewDialog(QDialog):
+    """Dialogo dedicado para visualizar y ajustar los items de la venta."""
+    def __init__(self, sale_items, parent_view=None, parent=None):
+        super().__init__(parent)
+        self.sale_items = sale_items or []
+        self.parent_view = parent_view
+        self._updating_table = False
+        self.setWindowTitle("Productos de la Venta")
+        self.setModal(True)
+        self.resize(800, 500)
+        self.setStyleSheet("""
+            QDialog { background-color: white; }
+            QLabel { color: #0f172a; font-size: 14px; }
+            QTableWidget {
+                gridline-color: #e2e8f0;
+                background-color: white;
+                font-size: 13px;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+            }
+            QTableWidget::item:selected {
+                background-color: #dbeafe;
+                color: #1e40af;
+            }
+            QHeaderView::section {
+                background-color: #f8fafc;
+                font-weight: bold;
+                border-bottom: 2px solid #e2e8f0;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        
+        title = QLabel("Vista completa de productos")
+        title.setStyleSheet("font-weight: bold; font-size: 18px; color: #0f172a;")
+        layout.addWidget(title)
+        
+        subtitle = QLabel("Revise con comodidad todos los items antes de completar la venta.")
+        subtitle.setStyleSheet("color: #475569; margin-bottom: 8px;")
+        layout.addWidget(subtitle)
+        
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Producto", "Precio Unit.", "Cantidad", "Subtotal", "Acciones"])
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.setColumnWidth(1, 130)
+        self.table.setColumnWidth(2, 110)
+        self.table.setColumnWidth(3, 150)
+        self.table.setColumnWidth(4, 80)
+        self.table.setEditTriggers(
+            QTableWidget.EditTrigger.DoubleClicked |
+            QTableWidget.EditTrigger.EditKeyPressed |
+            QTableWidget.EditTrigger.SelectedClicked
+        )
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        layout.addWidget(self.table)
+        
+        self.populate_items()
+        self.table.itemChanged.connect(self.on_quantity_changed)
+        
+        btn_close = QPushButton("Cerrar")
+        btn_close.setFixedHeight(36)
+        btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignRight)
+    
+    def populate_items(self):
+        self._updating_table = True
+        self.table.setRowCount(len(self.sale_items))
+        for row, item in enumerate(self.sale_items):
+            product_item = QTableWidgetItem(item.get('product_name', ''))
+            product_item.setFont(QFont("Arial", 12, QFont.Weight.Medium))
+            self.table.setItem(row, 0, product_item)
+            
+            unit_price = float(item.get('unit_price', 0))
+            unit_text = f"${unit_price:,.2f}" if unit_price % 1 else f"${int(unit_price):,}"
+            unit_item = QTableWidgetItem(unit_text)
+            unit_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row, 1, unit_item)
+            
+            qty_item = QTableWidgetItem(str(int(item.get('quantity', 0))))
+            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            qty_item.setFlags(qty_item.flags() | Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(row, 2, qty_item)
+            
+            subtotal = float(item.get('subtotal', 0))
+            subtotal_text = f"${subtotal:,.2f}" if subtotal % 1 else f"${int(subtotal):,}"
+            subtotal_item = QTableWidgetItem(subtotal_text)
+            subtotal_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            subtotal_item.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+            self.table.setItem(row, 3, subtotal_item)
+            
+            # Acciones
+            actions_widget = QWidget()
+            actions_layout = QHBoxLayout(actions_widget)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            actions_layout.setSpacing(6)
+            actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            button_style = """
+                QPushButton {
+                    background-color: transparent;
+                    border: none;
+                    color: #0f172a;
+                    font-size: 16px;
+                    font-weight: bold;
+                    padding: 0;
+                    min-width: 0;
+                }
+                QPushButton:hover {
+                    color: #2563eb;
+                }
+            """
+            
+            btn_increase = QPushButton("+")
+            btn_increase.setFixedSize(24, 24)
+            btn_increase.setStyleSheet(button_style)
+            btn_increase.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn_increase.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_increase.clicked.connect(lambda checked, r=row: self.change_quantity(r, +1))
+            actions_layout.addWidget(btn_increase)
+            
+            btn_decrease = QPushButton("-")
+            btn_decrease.setFixedSize(24, 24)
+            btn_decrease.setStyleSheet(button_style)
+            btn_decrease.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn_decrease.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_decrease.clicked.connect(lambda checked, r=row: self.change_quantity(r, -1))
+            actions_layout.addWidget(btn_decrease)
+            
+            self.table.setCellWidget(row, 4, actions_widget)
+            self.table.setRowHeight(row, 48)
+        self._updating_table = False
+    
+    def on_quantity_changed(self, item):
+        if self._updating_table or item.column() != 2:
+            return
+        row = item.row()
+        if row >= len(self.sale_items):
+            return
+        current_item = self.sale_items[row]
+        try:
+            new_quantity = int(item.text())
+        except ValueError:
+            self._restore_quantity(item, current_item['quantity'])
+            return
+        
+        if new_quantity < 0:
+            QMessageBox.warning(self, "Cantidad inválida", "La cantidad debe ser mayor o igual a 0.")
+            self._restore_quantity(item, current_item['quantity'])
+            return
+        
+        max_stock = current_item.get('stock', new_quantity)
+        if new_quantity > max_stock:
+            QMessageBox.warning(
+                self,
+                "Stock insuficiente",
+                f"Solo hay {max_stock} unidades disponibles para {current_item.get('product_name', 'el producto')}."
+            )
+            self._restore_quantity(item, current_item['quantity'])
+            return
+        
+        if new_quantity == 0:
+            self.sale_items.pop(row)
+            self.populate_items()
+        else:
+            current_item['quantity'] = new_quantity
+            current_item['subtotal'] = new_quantity * float(current_item['unit_price'])
+            self._updating_table = True
+            subtotal = current_item['subtotal']
+            subtotal_text = f"${subtotal:,.2f}" if subtotal % 1 else f"${int(subtotal):,}"
+            self.table.item(row, 3).setText(subtotal_text)
+            self._updating_table = False
+        
+        self._notify_parent_view()
+    
+    def _restore_quantity(self, table_item, quantity):
+        self._updating_table = True
+        table_item.setText(str(quantity))
+        self._updating_table = False
+    
+    def _notify_parent_view(self):
+        if self.parent_view:
+            self.parent_view.update_items_table()
+            self.parent_view.calculate_total()
+    
+    def change_quantity(self, row, delta):
+        if self._updating_table or row >= len(self.sale_items):
+            return
+        current_item = self.sale_items[row]
+        new_quantity = current_item['quantity'] + delta
+        if new_quantity < 0:
+            return
+        if new_quantity == 0:
+            self.sale_items.pop(row)
+        else:
+            max_stock = current_item.get('stock', new_quantity)
+            if new_quantity > max_stock:
+                QMessageBox.warning(
+                    self,
+                    "Stock insuficiente",
+                    f"Solo hay {max_stock} unidades disponibles para {current_item.get('product_name', 'el producto')}."
+                )
+                return
+            current_item['quantity'] = new_quantity
+            current_item['subtotal'] = new_quantity * float(current_item['unit_price'])
+        self.populate_items()
+        self._notify_parent_view()

@@ -484,6 +484,13 @@ class SalesView(QWidget):
     
     def edit_sale_full(self, sale):
         """Permite editar una venta completa incluyendo items y ajustando inventario"""
+        if getattr(sale, 'has_invoice', 0):
+            QMessageBox.warning(
+                self,
+                "Venta bloqueada",
+                "Esta venta ya tiene una factura legal generada y no se puede editar."
+            )
+            return
         dialog = EditSaleFullDialog(self, sale.id)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.load_sales()
@@ -1113,6 +1120,17 @@ class EditSaleDialog(QDialog):
         session = get_session()
         try:
             sale = session.query(Sale).filter_by(id=self.sale.id).first()
+            if not sale:
+                QMessageBox.critical(self, "Error", "Venta no encontrada")
+                return
+            if getattr(sale, 'has_invoice', 0):
+                QMessageBox.warning(
+                    self,
+                    "Venta bloqueada",
+                    "No es posible editar una venta que ya tiene factura generada."
+                )
+                self.reject()
+                return
             old_status = sale.status
             new_status = self.status_combo.currentData()
             
@@ -1245,6 +1263,95 @@ class EditSaleFullDialog(QDialog):
                 self.original_items.append(item_data.copy())
         finally:
             close_session()
+
+
+class ItemsFullViewDialog(QDialog):
+    """Vista dedicada para revisar los items de la venta en pantalla completa."""
+    def __init__(self, sale_items, parent=None):
+        super().__init__(parent)
+        self.sale_items = sale_items or []
+        self.setWindowTitle("Items de la venta")
+        self.setModal(True)
+        self.setMinimumSize(900, 500)
+        self.setStyleSheet("""
+            QDialog { background-color: white; }
+            QLabel { color: #0f172a; font-size: 14px; }
+            QTableWidget {
+                color: #0f172a;
+                font-size: 13px;
+                gridline-color: #e2e8f0;
+                background-color: white;
+            }
+            QHeaderView::section {
+                background-color: #f8fafc;
+                font-weight: bold;
+                border-bottom: 2px solid #e2e8f0;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        title_label = QLabel("Vista completa de items")
+        title_label.setStyleSheet("font-weight: bold; font-size: 18px; color: #0f172a; margin-bottom: 4px;")
+        layout.addWidget(title_label)
+        
+        subtitle = QLabel("Aquí solo se muestran los productos incluidos en la venta actual.")
+        subtitle.setStyleSheet("color: #475569; margin-bottom: 10px;")
+        layout.addWidget(subtitle)
+        
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Producto", "Precio Unit.", "Cantidad", "Subtotal"])
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.setColumnWidth(1, 130)
+        self.table.setColumnWidth(2, 120)
+        self.table.setColumnWidth(3, 150)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        layout.addWidget(self.table)
+        
+        self.populate_items()
+        
+        btn_close = QPushButton("Cerrar")
+        btn_close.setFixedHeight(38)
+        btn_close.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignRight)
+    
+    def populate_items(self):
+        self.table.setRowCount(len(self.sale_items))
+        for row, item in enumerate(self.sale_items):
+            product_item = QTableWidgetItem(item.get('product_name', ''))
+            product_item.setFont(QFont("Arial", 12, QFont.Weight.Medium))
+            self.table.setItem(row, 0, product_item)
+            
+            unit_price = float(item.get('unit_price', 0))
+            unit_text = f"${unit_price:,.2f}" if unit_price % 1 else f"${int(unit_price):,}"
+            unit_item = QTableWidgetItem(unit_text)
+            unit_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row, 1, unit_item)
+            
+            qty = int(item.get('quantity', 0))
+            qty_item = QTableWidgetItem(str(qty))
+            qty_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 2, qty_item)
+            
+            subtotal = float(item.get('subtotal', 0))
+            subtotal_text = f"${subtotal:,.2f}" if subtotal % 1 else f"${int(subtotal):,}"
+            subtotal_item = QTableWidgetItem(subtotal_text)
+            subtotal_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            subtotal_item.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+            self.table.setItem(row, 3, subtotal_item)
     
     def init_ui(self):
         self.setWindowTitle(f"Editar Venta - {self.sale_invoice}")
@@ -1564,9 +1671,35 @@ class EditSaleFullDialog(QDialog):
         self.build_products_gallery()
         
         # Tabla de items
+        items_header_layout = QHBoxLayout()
+        items_header_layout.setContentsMargins(0, 10, 0, 0)
+        items_header_layout.setSpacing(10)
+        
         items_label = QLabel("Items de la venta:")
-        items_label.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px;")
-        products_layout.addWidget(items_label)
+        items_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        items_header_layout.addWidget(items_label)
+        
+        items_header_layout.addStretch()
+        
+        self.items_fullscreen_btn = QPushButton("Ver en pantalla completa")
+        self.items_fullscreen_btn.setMinimumHeight(32)
+        self.items_fullscreen_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1d4ed8;
+                color: white;
+                font-weight: bold;
+                font-size: 12px;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #1e3a8a;
+            }
+        """)
+        self.items_fullscreen_btn.clicked.connect(self.open_items_full_view)
+        items_header_layout.addWidget(self.items_fullscreen_btn)
+        
+        products_layout.addLayout(items_header_layout)
         
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(5)
@@ -2065,6 +2198,11 @@ class EditSaleFullDialog(QDialog):
             if col >= max_cols:
                 col = 0
                 row += 1
+
+    def open_items_full_view(self):
+        """Abre una vista enfocada solamente en los items actuales."""
+        dialog = ItemsFullViewDialog(self.sale_items, parent=self)
+        dialog.exec()
     
     def quick_add_product(self, product, units=1):
         """Agrega producto rápido"""
@@ -2314,6 +2452,13 @@ class EditSaleFullDialog(QDialog):
             if not sale:
                 QMessageBox.critical(self, "Error", "Venta no encontrada")
                 return
+            if getattr(sale, 'has_invoice', 0):
+                QMessageBox.warning(
+                    self,
+                    "Venta con factura",
+                    "No es posible cancelar una venta que ya cuenta con factura generada."
+                )
+                return
             
             # Verificar si ya está cancelada
             if sale.status == SaleStatus.CANCELLED:
@@ -2413,6 +2558,14 @@ class EditSaleFullDialog(QDialog):
             sale = session.query(Sale).filter_by(id=self.sale_id).first()
             if not sale:
                 QMessageBox.critical(self, "Error", "Venta no encontrada")
+                return
+            if getattr(sale, 'has_invoice', 0):
+                QMessageBox.warning(
+                    self,
+                    "Venta bloqueada",
+                    "Esta venta ya tiene una factura legal generada y no puede ser modificada."
+                )
+                self.reject()
                 return
             
             # Confirmar edición
