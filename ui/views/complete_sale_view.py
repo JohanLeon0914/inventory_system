@@ -429,8 +429,8 @@ class CompleteSaleView(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Producto
         self.items_table.setColumnWidth(1, 100)  # Precio
         self.items_table.setColumnWidth(2, 80)  # Cantidad
-        self.items_table.setColumnWidth(3, 100)  # Subtotal
-        self.items_table.setColumnWidth(4, 80)   # Acciones compactas
+        self.items_table.setColumnWidth(3, 120)  # Subtotal
+        self.items_table.setColumnWidth(4, 150)  # Acciones con botones grandes
         
         # Configurar scroll
         self.items_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -666,38 +666,41 @@ class CompleteSaleView(QWidget):
             # Botones de acciones: sumar y restar
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(0, 0, 0, 0)
-            actions_layout.setSpacing(6)
+            actions_layout.setContentsMargins(6, 4, 6, 4)
+            actions_layout.setSpacing(10)
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
-            button_style = """
-                QPushButton {
-                    background-color: transparent;
-                    border: none;
-                    color: #0f172a;
-                    font-size: 16px;
-                    font-weight: bold;
-                    padding: 0;
-                    min-width: 0;
-                }
-                QPushButton:hover {
-                    color: #2563eb;
-                }
-            """
-            
-            # Botón sumar cantidad
             btn_increase = QPushButton("+")
-            btn_increase.setFixedSize(24, 24)
-            btn_increase.setStyleSheet(button_style)
+            btn_increase.setFixedSize(38, 38)
+            btn_increase.setStyleSheet("""
+                QPushButton {
+                    background-color: #10b981;
+                    color: white;
+                    border: none;
+                    border-radius: 19px;
+                    font-size: 18px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background-color: #059669; }
+            """)
             btn_increase.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn_increase.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_increase.clicked.connect(lambda checked, r=row: self.increase_item_quantity(r))
             actions_layout.addWidget(btn_increase)
             
-            # Botón reducir cantidad
             btn_reduce = QPushButton("-")
-            btn_reduce.setFixedSize(24, 24)
-            btn_reduce.setStyleSheet(button_style)
+            btn_reduce.setFixedSize(38, 38)
+            btn_reduce.setStyleSheet("""
+                QPushButton {
+                    background-color: #f59e0b;
+                    color: white;
+                    border: none;
+                    border-radius: 19px;
+                    font-size: 18px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background-color: #d97706; }
+            """)
             btn_reduce.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn_reduce.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_reduce.clicked.connect(lambda checked, r=row: self.reduce_item_quantity(r))
@@ -1004,10 +1007,10 @@ class ItemsFullViewDialog(QDialog):
         self.table.setHorizontalHeaderLabels(["Producto", "Precio Unit.", "Cantidad", "Subtotal", "Acciones"])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.table.setColumnWidth(1, 130)
+        self.table.setColumnWidth(1, 140)
         self.table.setColumnWidth(2, 110)
-        self.table.setColumnWidth(3, 150)
-        self.table.setColumnWidth(4, 80)
+        self.table.setColumnWidth(3, 160)
+        self.table.setColumnWidth(4, 150)
         self.table.setEditTriggers(
             QTableWidget.EditTrigger.DoubleClicked |
             QTableWidget.EditTrigger.EditKeyPressed |
@@ -1065,36 +1068,41 @@ class ItemsFullViewDialog(QDialog):
             # Acciones
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(0, 0, 0, 0)
-            actions_layout.setSpacing(6)
+            actions_layout.setContentsMargins(6, 4, 6, 4)
+            actions_layout.setSpacing(10)
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             
-            button_style = """
-                QPushButton {
-                    background-color: transparent;
-                    border: none;
-                    color: #0f172a;
-                    font-size: 16px;
-                    font-weight: bold;
-                    padding: 0;
-                    min-width: 0;
-                }
-                QPushButton:hover {
-                    color: #2563eb;
-                }
-            """
-            
             btn_increase = QPushButton("+")
-            btn_increase.setFixedSize(24, 24)
-            btn_increase.setStyleSheet(button_style)
+            btn_increase.setFixedSize(38, 38)
+            btn_increase.setStyleSheet("""
+                QPushButton {
+                    background-color: #10b981;
+                    color: white;
+                    border: none;
+                    border-radius: 19px;
+                    font-size: 18px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background-color: #059669; }
+            """)
             btn_increase.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn_increase.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_increase.clicked.connect(lambda checked, r=row: self.change_quantity(r, +1))
             actions_layout.addWidget(btn_increase)
             
             btn_decrease = QPushButton("-")
-            btn_decrease.setFixedSize(24, 24)
-            btn_decrease.setStyleSheet(button_style)
+            btn_decrease.setFixedSize(38, 38)
+            btn_decrease.setStyleSheet("""
+                QPushButton {
+                    background-color: #f59e0b;
+                    color: white;
+                    border: none;
+                    border-radius: 19px;
+                    font-size: 18px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background-color: #d97706; }
+            """)
             btn_decrease.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn_decrease.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_decrease.clicked.connect(lambda checked, r=row: self.change_quantity(r, -1))
