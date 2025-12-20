@@ -2700,3 +2700,14 @@ class ItemsFullViewDialog(QDialog):
             QMessageBox.critical(self, "Error", f"Error al editar venta: {str(e)}\n\n{traceback.format_exc()}")
         finally:
             close_session()
+
+
+import inspect
+
+for _name, _attr in ItemsFullViewDialog.__dict__.items():
+    if _name.startswith('__'):
+        continue
+    if _name in EditSaleFullDialog.__dict__:
+        continue
+    if inspect.isfunction(_attr):
+        setattr(EditSaleFullDialog, _name, _attr)
