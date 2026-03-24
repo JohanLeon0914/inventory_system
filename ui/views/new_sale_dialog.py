@@ -85,31 +85,33 @@ class NewSaleDialog(QDialog):
             # Crear venta
             sale = Sale()
             
-            # Generar número de factura único
-            max_attempts = 10
-            for attempt in range(max_attempts):
-                if attempt == 0:
-                    # Intentar con el siguiente número secuencial
-                    last_sale = session.query(Sale).order_by(Sale.id.desc()).first()
-                    if last_sale:
-                        try:
-                            last_number = int(last_sale.invoice_number.split('-')[1])
-                            invoice_number = f"INV-{last_number + 1:06d}"
-                        except (ValueError, IndexError):
-                            invoice_number = f"INV-{int(time.time()):06d}"
-                    else:
-                        invoice_number = "INV-000001"
+            # Generar número de factura usando el contador persistente
+            from models.invoice_counter import InvoiceCounter
+            
+            # Obtener o crear el contador
+            counter = session.query(InvoiceCounter).filter_by(counter_key="default").first()
+            if not counter:
+                counter = InvoiceCounter(counter_key="default", prefix="INV", format_digits=6)
+                session.add(counter)
+                session.flush()  # Para obtener el ID
+            
+            # Generar el siguiente número
+            invoice_number = counter.get_next_number()
+            
+            # Verificar que no exista (doble seguridad)
+            existing = session.query(Sale).filter_by(invoice_number=invoice_number).first()
+            if existing:
+                # Si existe por alguna razón, buscar el siguiente disponible
+                max_attempts = 100
+                for attempt in range(max_attempts):
+                    invoice_number = counter.get_next_number()
+                    existing = session.query(Sale).filter_by(invoice_number=invoice_number).first()
+                    if not existing:
+                        break
                 else:
-                    # Si hay conflicto, usar timestamp
-                    invoice_number = f"INV-{int(time.time() * 1000):06d}"
-                
-                # Verificar si el número ya existe
-                existing = session.query(Sale).filter_by(invoice_number=invoice_number).first()
-                if not existing:
-                    sale.invoice_number = invoice_number
-                    break
-            else:
-                raise Exception("No se pudo generar un número de factura único después de varios intentos")
+                    raise Exception("No se pudo generar un número de factura único")
+            
+            sale.invoice_number = invoice_number
             
             sale.customer_id = customer_id
             sale.payment_method = payment_method

@@ -548,7 +548,7 @@ class SalesView(QWidget):
             self.load_sales()
     
     def export_to_excel(self):
-        """Exporta todas las ventas a un archivo Excel"""
+        """Exporta todas las ventas a un archivo Excel con formato optimizado para análisis de datos"""
         try:
             # Seleccionar ubicación del archivo
             file_path, _ = QFileDialog.getSaveFileName(
@@ -563,9 +563,11 @@ class SalesView(QWidget):
             
             session = get_session()
             try:
-                # Obtener todas las ventas con sus items
+                # Obtener todas las ventas con sus items y productos
                 from sqlalchemy.orm import joinedload
-                sales = session.query(Sale).options(joinedload(Sale.items)).order_by(Sale.created_at.desc()).all()
+                sales = session.query(Sale).options(
+                    joinedload(Sale.items).joinedload(SaleItem.product)
+                ).order_by(Sale.created_at.desc()).all()
                 
                 if not sales:
                     QMessageBox.warning(self, "Advertencia", "No hay ventas para exportar")
@@ -573,72 +575,112 @@ class SalesView(QWidget):
                 
                 # Crear libro de Excel
                 wb = Workbook()
+                wb.remove(wb.active)  # Eliminar hoja por defecto
                 
-                # Hoja 1: Resumen de Ventas
-                ws_summary = wb.active
-                ws_summary.title = "Resumen de Ventas"
+                # Hoja 1: Detalle completo de ventas (formato analítico)
+                ws_detail = wb.create_sheet(title="Detalle Ventas")
                 
-                # Encabezados con estilo
-                headers = ["N° Factura", "Fecha", "Cliente", "Método Pago", "Estado", "Subtotal", "Impuesto", "Descuento", "Total"]
+                # Encabezados con estilo - cada producto en una fila separada
+                headers = [
+                    "N° Factura", "Fecha Venta", "Cliente", 
+                    "Método Pago", "Estado Venta", "ID Producto", "SKU", 
+                    "Nombre Producto", "Cantidad", "Precio Unitario", 
+                    "Subtotal Producto", "Subtotal Venta", "Impuesto Venta", 
+                    "Descuento Venta", "Total Venta"
+                ]
                 for col, header in enumerate(headers, 1):
-                    cell = ws_summary.cell(row=1, column=col, value=header)
+                    cell = ws_detail.cell(row=1, column=col, value=header)
                     cell.font = Font(bold=True, color="FFFFFF")
                     cell.fill = PatternFill(start_color="2563eb", end_color="2563eb", fill_type="solid")
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                 
-                # Datos
-                for row, sale in enumerate(sales, 2):
-                    ws_summary.cell(row=row, column=1, value=sale.invoice_number)
-                    ws_summary.cell(row=row, column=2, value=sale.created_at.strftime("%d/%m/%Y %H:%M"))
-                    ws_summary.cell(row=row, column=3, value=sale.customer.name if sale.customer else "Cliente General")
-                    ws_summary.cell(row=row, column=4, value=sale.payment_method.value)
-                    ws_summary.cell(row=row, column=5, value=sale.status.value)
-                    ws_summary.cell(row=row, column=6, value=sale.subtotal)
-                    ws_summary.cell(row=row, column=7, value=sale.tax)
-                    ws_summary.cell(row=row, column=8, value=sale.discount)
-                    ws_summary.cell(row=row, column=9, value=sale.total)
+                # Datos - cada item de venta en su propia fila
+                row = 2
+                for sale in sales:
+                    for item in sale.items:
+                        # Información de la venta
+                        ws_detail.cell(row=row, column=1, value=sale.invoice_number)  # N° Factura
+                        ws_detail.cell(row=row, column=2, value=sale.created_at.strftime("%d/%m/%Y %H:%M:%S"))  # Fecha Venta
+                        ws_detail.cell(row=row, column=3, value=sale.customer.name if sale.customer else "Cliente General")  # Cliente
+                        ws_detail.cell(row=row, column=4, value=sale.payment_method.value)  # Método Pago
+                        ws_detail.cell(row=row, column=5, value=sale.status.value)  # Estado Venta
+                        
+                        # Información del producto
+                        ws_detail.cell(row=row, column=6, value=item.product.id if item.product else "")  # ID Producto
+                        ws_detail.cell(row=row, column=7, value=item.product.sku if item.product else "")  # SKU
+                        ws_detail.cell(row=row, column=8, value=item.product.name if item.product else "Producto eliminado")  # Nombre Producto
+                        ws_detail.cell(row=row, column=9, value=item.quantity)  # Cantidad
+                        ws_detail.cell(row=row, column=10, value=item.unit_price)  # Precio Unitario
+                        ws_detail.cell(row=row, column=11, value=item.subtotal)  # Subtotal Producto
+                        
+                        # Información de la venta (repetida para cada item)
+                        ws_detail.cell(row=row, column=12, value=sale.subtotal)  # Subtotal Venta
+                        ws_detail.cell(row=row, column=13, value=sale.tax)  # Impuesto Venta
+                        ws_detail.cell(row=row, column=14, value=sale.discount)  # Descuento Venta
+                        ws_detail.cell(row=row, column=15, value=sale.total)  # Total Venta
+                        
+                        row += 1
                 
                 # Ajustar anchos de columna
-                ws_summary.column_dimensions['A'].width = 15
-                ws_summary.column_dimensions['B'].width = 18
-                ws_summary.column_dimensions['C'].width = 25
-                ws_summary.column_dimensions['D'].width = 15
-                ws_summary.column_dimensions['E'].width = 12
-                ws_summary.column_dimensions['F'].width = 12
-                ws_summary.column_dimensions['G'].width = 12
-                ws_summary.column_dimensions['H'].width = 12
-                ws_summary.column_dimensions['I'].width = 12
+                column_widths = [15, 20, 25, 15, 12, 10, 15, 30, 10, 12, 12, 12, 12, 12, 12]
+                for i, width in enumerate(column_widths, 1):
+                    ws_detail.column_dimensions[chr(64 + i)].width = width
                 
-                # Hoja 2: Detalle de Items
-                ws_detail = wb.create_sheet(title="Detalle de Items")
+                # Hoja 2: Resumen de ventas (agregado)
+                ws_summary = wb.create_sheet(title="Resumen Ventas")
                 
-                detail_headers = ["N° Factura", "Fecha", "Cliente", "Producto", "Cantidad", "Precio Unit.", "Subtotal"]
-                for col, header in enumerate(detail_headers, 1):
-                    cell = ws_detail.cell(row=1, column=col, value=header)
+                # Encabezados del resumen
+                summary_headers = ["ID Venta", "N° Factura", "Fecha Venta", "Cliente", "Método Pago", "Estado", "Subtotal", "Impuesto", "Descuento", "Total", "Cantidad Items"]
+                for col, header in enumerate(summary_headers, 1):
+                    cell = ws_summary.cell(row=1, column=col, value=header)
                     cell.font = Font(bold=True, color="FFFFFF")
                     cell.fill = PatternFill(start_color="10b981", end_color="10b981", fill_type="solid")
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                 
-                detail_row = 2
-                for sale in sales:
-                    for item in sale.items:
-                        ws_detail.cell(row=detail_row, column=1, value=sale.invoice_number)
-                        ws_detail.cell(row=detail_row, column=2, value=sale.created_at.strftime("%d/%m/%Y %H:%M"))
-                        ws_detail.cell(row=detail_row, column=3, value=sale.customer.name if sale.customer else "Cliente General")
-                        ws_detail.cell(row=detail_row, column=4, value=item.product.name)
-                        ws_detail.cell(row=detail_row, column=5, value=item.quantity)
-                        ws_detail.cell(row=detail_row, column=6, value=item.unit_price)
-                        ws_detail.cell(row=detail_row, column=7, value=item.subtotal)
-                        detail_row += 1
+                # Datos del resumen
+                for row, sale in enumerate(sales, 2):
+                    ws_summary.cell(row=row, column=1, value=sale.id)
+                    ws_summary.cell(row=row, column=2, value=sale.invoice_number)
+                    ws_summary.cell(row=row, column=3, value=sale.created_at.strftime("%d/%m/%Y %H:%M:%S"))
+                    ws_summary.cell(row=row, column=4, value=sale.customer.name if sale.customer else "Cliente General")
+                    ws_summary.cell(row=row, column=5, value=sale.payment_method.value)
+                    ws_summary.cell(row=row, column=6, value=sale.status.value)
+                    ws_summary.cell(row=row, column=7, value=sale.subtotal)
+                    ws_summary.cell(row=row, column=8, value=sale.tax)
+                    ws_summary.cell(row=row, column=9, value=sale.discount)
+                    ws_summary.cell(row=row, column=10, value=sale.total)
+                    ws_summary.cell(row=row, column=11, value=len(sale.items))
                 
-                # Ajustar anchos de columna
-                ws_detail.column_dimensions['A'].width = 15
-                ws_detail.column_dimensions['B'].width = 18
-                ws_detail.column_dimensions['C'].width = 25
-                ws_detail.column_dimensions['D'].width = 30
-                ws_detail.column_dimensions['E'].width = 10
-                ws_detail.column_dimensions['F'].width = 12
-                ws_detail.column_dimensions['G'].width = 12
+                # Ajustar anchos de columna del resumen
+                summary_widths = [10, 15, 20, 25, 15, 12, 12, 12, 12, 12, 12]
+                for i, width in enumerate(summary_widths, 1):
+                    ws_summary.column_dimensions[chr(64 + i)].width = width
+                
+                # Hoja 3: Estadísticas básicas
+                ws_stats = wb.create_sheet(title="Estadísticas")
+                
+                # Calcular estadísticas
+                total_ventas = len(sales)
+                total_items = sum(len(sale.items) for sale in sales)
+                total_facturado = sum(sale.total for sale in sales)
+                venta_promedio = total_facturado / total_ventas if total_ventas > 0 else 0
+                
+                # Escribir estadísticas
+                stats_data = [
+                    ["Estadística", "Valor"],
+                    ["Total de Ventas", total_ventas],
+                    ["Total de Items Vendidos", total_items],
+                    ["Total Facturado", total_facturado],
+                    ["Venta Promedio", venta_promedio],
+                    ["Fecha Exportación", datetime.now().strftime("%d/%m/%Y %H:%M:%S")]
+                ]
+                
+                for row_idx, (label, value) in enumerate(stats_data, 1):
+                    ws_stats.cell(row=row_idx, column=1, value=label).font = Font(bold=True)
+                    ws_stats.cell(row=row_idx, column=2, value=value)
+                
+                ws_stats.column_dimensions['A'].width = 20
+                ws_stats.column_dimensions['B'].width = 20
                 
                 # Guardar archivo
                 wb.save(file_path)
@@ -646,7 +688,14 @@ class SalesView(QWidget):
                 QMessageBox.information(
                     self,
                     "Éxito",
-                    f"Ventas exportadas correctamente\n\nArchivo: {file_path}\nTotal ventas: {len(sales)}"
+                    f"Ventas exportadas correctamente\n\n"
+                    f"Archivo: {file_path}\n"
+                    f"Total ventas: {len(sales)}\n"
+                    f"Total items: {total_items}\n\n"
+                    f"Formato optimizado para análisis de datos:\n"
+                    f"• Hoja 'Detalle Ventas': Cada producto en fila separada\n"
+                    f"• Hoja 'Resumen Ventas': Vista agregada por venta\n"
+                    f"• Hoja 'Estadísticas': Resumen numérico"
                 )
                 
             except Exception as e:
@@ -905,6 +954,9 @@ class SalesView(QWidget):
                 
                 # Eliminar todas las ventas
                 session.query(Sale).delete()
+                
+                # NO eliminar el contador de facturas para mantener la secuencia
+                # El contador debe persistir aunque se limpien las ventas
                 
                 session.commit()
                 

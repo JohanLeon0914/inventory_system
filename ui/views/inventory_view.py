@@ -151,6 +151,28 @@ class InventoryView(QWidget):
         btn_refresh_rm.setFixedHeight(40)
         btn_refresh_rm.clicked.connect(self.load_raw_materials_inventory)
         search_rm_layout.addWidget(btn_refresh_rm)
+        
+        # Botón para exportar materia prima
+        btn_export_rm = QPushButton("📊 Exportar Inventario")
+        btn_export_rm.setFixedWidth(150)
+        btn_export_rm.setFixedHeight(40)
+        btn_export_rm.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 0 15px;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+        """)
+        btn_export_rm.clicked.connect(lambda: self.export_inventory_to_excel(is_raw_material=True))
+        search_rm_layout.addWidget(btn_export_rm)
+        
         raw_materials_layout.addLayout(search_rm_layout)
         
         # Tabla de materia prima
@@ -190,11 +212,33 @@ class InventoryView(QWidget):
         self.search_input.setStyleSheet("color: #0f172a;")
         search_products_layout.addWidget(self.search_input)
         
-        btn_refresh = QPushButton("Actualizar")
-        btn_refresh.setFixedWidth(120)
-        btn_refresh.setFixedHeight(40)
-        btn_refresh.clicked.connect(self.load_products_inventory)
-        search_products_layout.addWidget(btn_refresh)
+        btn_refresh_products = QPushButton("Actualizar")
+        btn_refresh_products.setFixedWidth(120)
+        btn_refresh_products.setFixedHeight(40)
+        btn_refresh_products.clicked.connect(self.load_products_inventory)
+        search_products_layout.addWidget(btn_refresh_products)
+        
+        # Botón para exportar productos
+        btn_export_products = QPushButton("📊 Exportar Inventario")
+        btn_export_products.setFixedWidth(150)
+        btn_export_products.setFixedHeight(40)
+        btn_export_products.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+                padding: 0 15px;
+            }
+            QPushButton:hover {
+                background-color: #059669;
+            }
+        """)
+        btn_export_products.clicked.connect(lambda: self.export_inventory_to_excel(is_raw_material=False))
+        search_products_layout.addWidget(btn_export_products)
+        
         products_layout.addLayout(search_products_layout)
         
         # Tabla de productos
@@ -646,6 +690,198 @@ class InventoryView(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.on_tab_changed()  # Recargar movimientos según el tab activo
     
+    def export_inventory_to_excel(self, is_raw_material=False):
+        """Exporta el inventario actual a Excel con fecha de creación para análisis de datos"""
+        try:
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment
+            import os
+            
+            # Determinar nombre del archivo y tipo
+            if is_raw_material:
+                default_name = f"Inventario_MateriaPrima_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                title_prefix = "Materia Prima"
+            else:
+                default_name = f"Inventario_Productos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                title_prefix = "Productos"
+            
+            # Solicitar ubicación para guardar
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                f"Guardar Inventario de {title_prefix}",
+                os.path.join(os.path.expanduser("~"), "Desktop", default_name),
+                "Archivos Excel (*.xlsx)"
+            )
+            
+            if not file_path:
+                return
+            
+            session = get_session()
+            try:
+                # Obtener datos según el tipo
+                if is_raw_material:
+                    items = session.query(RawMaterial).all()
+                    headers = [
+                        "ID", "SKU", "Nombre", "Unidad", "Stock Actual", 
+                        "Stock Mínimo", "Costo Unitario", "Estado Stock",
+                        "Fecha Creación", "Última Actualización"
+                    ]
+                else:
+                    items = session.query(Product).all()
+                    headers = [
+                        "ID", "SKU", "Nombre", "Categoría", "Stock Actual",
+                        "Stock Mínimo", "Precio Venta", "Precio Costo",
+                        "Estado Stock", "Fecha Creación", "Última Actualización"
+                    ]
+                
+                if not items:
+                    QMessageBox.warning(self, "Advertencia", f"No hay {title_prefix.lower()} para exportar")
+                    return
+                
+                # Crear libro de Excel
+                wb = Workbook()
+                ws = wb.active
+                ws.title = f"Inventario {title_prefix}"
+                
+                # Título
+                ws.merge_cells('A1:K1')
+                title_cell = ws['A1']
+                title_cell.value = f"Inventario de {title_prefix} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+                title_cell.font = Font(size=16, bold=True, color="FFFFFF")
+                title_cell.alignment = Alignment(horizontal="center", vertical="center")
+                title_cell.fill = PatternFill(start_color="2563eb", end_color="2563eb", fill_type="solid")
+                
+                # Información de exportación
+                ws.merge_cells('A2:K2')
+                info_cell = ws['A2']
+                info_cell.value = f"Generado por: Sistema de Inventario | Total registros: {len(items)}"
+                info_cell.font = Font(size=11, italic=True)
+                info_cell.alignment = Alignment(horizontal="center", vertical="center")
+                
+                # Encabezados con estilo
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=4, column=col, value=header)
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill(start_color="10b981", end_color="10b981", fill_type="solid")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                
+                # Datos
+                for row, item in enumerate(items, 5):
+                    if is_raw_material:
+                        # Datos de materia prima
+                        ws.cell(row=row, column=1, value=item.id)
+                        ws.cell(row=row, column=2, value=item.sku)
+                        ws.cell(row=row, column=3, value=item.name)
+                        ws.cell(row=row, column=4, value=item.unit)
+                        ws.cell(row=row, column=5, value=f"{item.stock:.2f}")
+                        ws.cell(row=row, column=6, value=f"{item.min_stock:.2f}")
+                        ws.cell(row=row, column=7, value=getattr(item, 'cost', 0) or 0)
+                        
+                        # Estado del stock
+                        if item.stock <= item.min_stock:
+                            status = "BAJO STOCK"
+                            status_color = "FF6B6B"  # Rojo
+                        else:
+                            status = "NORMAL"
+                            status_color = "51CF66"  # Verde
+                        ws.cell(row=row, column=8, value=status)
+                        ws.cell(row=row, column=8).fill = PatternFill(start_color=status_color, end_color=status_color, fill_type="solid")
+                        
+                        # Fechas
+                        ws.cell(row=row, column=9, value=item.created_at.strftime("%d/%m/%Y %H:%M:%S"))
+                        ws.cell(row=row, column=10, value=item.updated_at.strftime("%d/%m/%Y %H:%M:%S"))
+                    else:
+                        # Datos de productos
+                        ws.cell(row=row, column=1, value=item.id)
+                        ws.cell(row=row, column=2, value=item.sku)
+                        ws.cell(row=row, column=3, value=item.name)
+                        ws.cell(row=row, column=4, value=item.category.name if item.category else "")
+                        ws.cell(row=row, column=5, value=item.stock)
+                        ws.cell(row=row, column=6, value=item.min_stock)
+                        ws.cell(row=row, column=7, value=getattr(item, 'sale_price', 0) or 0)
+                        ws.cell(row=row, column=8, value=getattr(item, 'cost_price', 0) or 0)
+                        
+                        # Estado del stock
+                        if item.stock == 0:
+                            status = "SIN STOCK"
+                            status_color = "FF6B6B"  # Rojo
+                        elif item.stock <= item.min_stock:
+                            status = "BAJO STOCK"
+                            status_color = "FFD93D"  # Amarillo
+                        else:
+                            status = "NORMAL"
+                            status_color = "51CF66"  # Verde
+                        ws.cell(row=row, column=9, value=status)
+                        ws.cell(row=row, column=9).fill = PatternFill(start_color=status_color, end_color=status_color, fill_type="solid")
+                        
+                        # Fechas
+                        ws.cell(row=row, column=10, value=item.created_at.strftime("%d/%m/%Y %H:%M:%S"))
+                        ws.cell(row=row, column=11, value=item.updated_at.strftime("%d/%m/%Y %H:%M:%S"))
+                
+                # Ajustar anchos de columna
+                column_widths = [10, 15, 30, 20, 12, 12, 12, 12, 15, 20, 20]
+                for i, width in enumerate(column_widths, 1):
+                    if i <= len(headers):
+                        ws.column_dimensions[chr(64 + i)].width = width
+                
+                # Hoja 2: Estadísticas
+                ws_stats = wb.create_sheet(title="Estadísticas")
+                
+                # Calcular estadísticas
+                total_items = len(items)
+                if is_raw_material:
+                    low_stock_items = sum(1 for item in items if item.stock <= item.min_stock)
+                    total_stock_value = sum(item.stock * (getattr(item, 'cost', 0) or 0) for item in items)
+                    stats_title = "Estadísticas de Materia Prima"
+                else:
+                    low_stock_items = sum(1 for item in items if item.stock <= item.min_stock)
+                    total_stock_value = sum(item.stock * (getattr(item, 'cost_price', 0) or 0) for item in items)
+                    stats_title = "Estadísticas de Productos"
+                
+                # Escribir estadísticas
+                ws_stats.cell(row=1, column=1, value=stats_title).font = Font(size=14, bold=True)
+                ws_stats.cell(row=3, column=1, value="Total de Items:").font = Font(bold=True)
+                ws_stats.cell(row=3, column=2, value=total_items)
+                ws_stats.cell(row=4, column=1, value="Items con Stock Bajo:").font = Font(bold=True)
+                ws_stats.cell(row=4, column=2, value=low_stock_items)
+                ws_stats.cell(row=5, column=1, value="Valor Total del Inventario:").font = Font(bold=True)
+                ws_stats.cell(row=5, column=2, value=f"${total_stock_value:,.2f}")
+                ws_stats.cell(row=6, column=1, value="Fecha de Exportación:").font = Font(bold=True)
+                ws_stats.cell(row=6, column=2, value=datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                
+                ws_stats.column_dimensions['A'].width = 25
+                ws_stats.column_dimensions['B'].width = 20
+                
+                # Guardar archivo
+                wb.save(file_path)
+                
+                QMessageBox.information(
+                    self,
+                    "✅ Éxito",
+                    f"Inventario de {title_prefix.lower()} exportado correctamente.\n\n"
+                    f"Archivo: {file_path}\n"
+                    f"Total registros: {total_items}\n"
+                    f"Items con stock bajo: {low_stock_items}\n"
+                    f"Valor total: ${total_stock_value:,.2f}\n\n"
+                    f"El archivo incluye:\n"
+                    f"• Fechas de creación y actualización\n"
+                    f"• Estado actual del stock\n"
+                    f"• Estadísticas generales"
+                )
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Error al exportar inventario: {str(e)}")
+            finally:
+                close_session()
+                
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "La librería openpyxl no está instalada.\n\n"
+                "Instale con: pip install openpyxl"
+            )
+
     def export_movements_to_excel(self):
         """Exporta los movimientos del día seleccionado a Excel"""
         try:

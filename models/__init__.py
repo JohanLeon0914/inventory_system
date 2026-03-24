@@ -15,6 +15,7 @@ from models.inventory_movement import InventoryMovement, MovementType
 from models.expense import Expense, ExpenseType, ExpenseReason
 from models.inventory_password import InventoryPassword
 from models.company_info import CompanyInfo
+from models.invoice_counter import InvoiceCounter
 
 __all__ = [
     'Base',
@@ -38,4 +39,5 @@ __all__ = [
     'ExpenseReason',
     'InventoryPassword',
     'CompanyInfo',
+    'InvoiceCounter',
 ]

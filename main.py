@@ -19,6 +19,8 @@ def main():
     print("\n[1/4] Inicializando base de datos...")
     try:
         init_db()
+        from config.database import init_invoice_counter
+        init_invoice_counter()
     except Exception as e:
         print(f"✗ Error al inicializar BD: {e}")
         return

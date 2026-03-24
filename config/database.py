@@ -73,3 +73,61 @@ def close_session():
     Cierra la sesión de base de datos
     """
     Session.remove()
+
+def init_invoice_counter():
+    """
+    Inicializa el contador de facturas si no existe.
+    Para sistemas existentes, busca el número más alto y lo usa como base.
+    """
+    session = get_session()
+    try:
+        from models.invoice_counter import InvoiceCounter
+        from models.sale import Sale
+        
+        # Verificar si ya existe un contador
+        counter = session.query(InvoiceCounter).filter_by(counter_key="default").first()
+        if not counter:
+            # Buscar la última venta para determinar el número base
+            last_sale = session.query(Sale).order_by(Sale.id.desc()).first()
+            
+            if last_sale:
+                try:
+                    # Extraer el número del formato INV-XXXXXX
+                    last_number = int(last_sale.invoice_number.split('-')[1])
+                    print(f"Última factura existente: {last_sale.invoice_number}")
+                    
+                    # Crear contador con el valor actual
+                    counter = InvoiceCounter(
+                        counter_key="default", 
+                        prefix="INV", 
+                        format_digits=6,
+                        current_value=last_number
+                    )
+                    session.add(counter)
+                    session.commit()
+                    print(f"Contador de facturas inicializado en {last_number}")
+                    print(f"Próxima factura: INV-{last_number + 1:06d}")
+                    
+                except (ValueError, IndexError):
+                    print(f"Error al procesar última factura: {last_sale.invoice_number}")
+                    print("Iniciando contador desde 0 por seguridad")
+                    
+                    # Si hay error, iniciar desde 0
+                    counter = InvoiceCounter(counter_key="default", prefix="INV", format_digits=6)
+                    session.add(counter)
+                    session.commit()
+                    print("Contador de facturas inicializado desde 0")
+            else:
+                # No hay ventas, iniciar desde 0
+                counter = InvoiceCounter(counter_key="default", prefix="INV", format_digits=6)
+                session.add(counter)
+                session.commit()
+                print("No hay ventas existentes. Contador inicializado desde 0")
+        else:
+            print("Contador de facturas ya existe")
+            
+    except Exception as e:
+        print(f"Error al inicializar contador de facturas: {e}")
+        session.rollback()
+    finally:
+        close_session()
